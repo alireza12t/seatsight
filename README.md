@@ -14,7 +14,7 @@ SeatSight is a free, open source **3D seat preview** that shows it's easy. Tap a
 ![Size](https://img.shields.io/badge/web%20app-48%20KB-555)
 [![License: MIT](https://img.shields.io/badge/license-MIT-FF5C7A)](LICENSE)
 
-**▶ Watch: [How I built it, iPhone first (4 min)](https://youtu.be/xLEtWH8cA_4)**
+**▶ Watch: [How I built it, iPhone first (4 min)](https://youtu.be/xLEtWH8cA_4)** · [The 47 second Short](https://youtube.com/shorts/A0X7a8VpUZw)
 
 <a href="https://youtu.be/xLEtWH8cA_4"><img src="docs/media/youtube-long.jpg" alt="YouTube video: 3D seat view for movie tickets, why don't cinema apps have this?" width="560"></a>
 
