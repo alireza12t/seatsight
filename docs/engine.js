@@ -67,14 +67,18 @@ const SeatSight = (() => {
     const cS = c === null || c >= 0.09 ? 1 : c >= 0.06 ? 0.94 : c >= 0 ? 0.82 : 0.68;
     const score = Math.round(100 * aS * nS * oS * cS);
     const tv = Math.round((2 * COUCH * Math.tan(rad(h / 2)) * 1.147) / 0.0254);
-    const notes = [];
-    if (h > ideal * 1.25) notes.push('Very close. The screen spills past your view, you will move your head to follow action.');
-    else if (h < ideal * 0.7) notes.push('Far back. Feels more like a big TV than a wall of picture.');
-    else notes.push('The screen fills your view about right for this format.');
-    if (neck > 30) notes.push(`You look up ${Math.round(neck)}° to the top edge. Neck strain is likely in a long movie.`);
-    if (off > 20) notes.push('Well off to the side. The picture looks skewed.');
-    if (c !== null && c < 0.06) notes.push('The head in front may cover the bottom of the screen (subtitles).');
-    return { h, neck, off, c, score, tv, notes };
+    // Plain-language facts for buyers. All of these are estimates: room sizes are typical, people vary.
+    const k = h / ideal, facts = [];
+    facts.push({ k: 'screen', ok: k >= 0.75 && k <= 1.25, sub: `Like a ${tv}" TV at home`,
+      t: k > 1.25 ? 'Very close, the screen is huge' : k > 1.1 ? 'Big and immersive' : k >= 0.85 ? 'Screen fills your view just right' : k >= 0.7 ? 'A bit far, still a big picture' : 'Far back, the screen feels smaller' });
+    facts.push({ k: 'neck', ok: neck <= 30, t: neck > 35 ? 'You will look up a lot' : neck > 30 ? 'You look up a little' : 'Comfortable, no neck strain' });
+    facts.push({ k: 'heads', ok: c === null || c >= 0.06,
+      t: c === null ? 'Front row, nobody in front of you' : c < 0.06 ? 'Heads in front may cover subtitles' : c < 0.16 ? 'Clear view for most people' : 'Clear view, even behind a tall person',
+      sub: c !== null && c >= 0.06 && c < 0.16 ? 'A tall person in front could cover the bottom edge' : '' });
+    facts.push({ k: 'center', ok: off <= 20, t: off > 20 ? 'Off to the side, the picture looks angled' : off > 10 ? 'Slightly off center' : 'Centered on the screen' });
+    const verdict = score >= 85 ? 'Great seat' : score >= 70 ? 'Good seat' : score >= 50 ? 'Okay seat' : 'Not ideal';
+    const tone = score >= 85 ? 'great' : score >= 70 ? 'good' : score >= 50 ? 'okay' : 'poor';
+    return { h, neck, off, c, score, tv, facts, verdict, tone };
   }
 
   // ---------- Scene (built once per room) ----------
@@ -95,8 +99,8 @@ const SeatSight = (() => {
     quad([[-hw, 0, 0], [hw, 0, 0], [hw, r.ceil, 0], [-hw, r.ceil, 0]], [14, 15, 20], 0, [0, 0, 1]);
     quad([[-hw, 0, r.back], [-hw, 0, 0], [-hw, r.ceil, 0], [-hw, r.ceil, r.back]], wall, 0, [1, 0, 0]);
     quad([[hw, 0, 0], [hw, 0, r.back], [hw, r.ceil, r.back], [hw, r.ceil, 0]], wall, 0, [-1, 0, 0]);
-    quad([[hw, 0, r.back], [-hw, 0, r.back], [-hw, r.ceil, r.back], [hw, r.ceil, r.back]], wall, 0, [0, 0, -1]);
-    quad([[-hw, r.ceil, 0], [hw, r.ceil, 0], [hw, r.ceil, r.back], [-hw, r.ceil, r.back]], [12, 12, 16], 0, [0, -1, 0]);
+    quad([[hw, 0, r.back], [-hw, 0, r.back], [-hw, r.ceil, r.back], [hw, r.ceil, r.back]], wall, 0, [0, 0, -1], { shell: true });
+    quad([[-hw, r.ceil, 0], [hw, r.ceil, 0], [hw, r.ceil, r.back], [-hw, r.ceil, r.back]], [12, 12, 16], 0, [0, -1, 0], { shell: true });
     // floor and steps
     let prevFloor = 0, prevZ = 0;
     r.rows.forEach((row) => {
@@ -138,13 +142,13 @@ const SeatSight = (() => {
     // subtitles sit at the bottom of the frame, to check what the head in front covers
     [[0.25, 0.75, 0.05], [0.32, 0.68, 0.025]].forEach(([u0, u1, v]) => { const y = mid - ch / 2 + v * ch; quad([[-cw / 2 + u0 * cw, y, zS + 0.008], [-cw / 2 + u1 * cw, y, zS + 0.008], [-cw / 2 + u1 * cw, y + ch * 0.028, zS + 0.008], [-cw / 2 + u0 * cw, y + ch * 0.028, zS + 0.008]], [250, 250, 250], 10, null, { emit: true }); });
     // seats and people
-    const seatC = hex(a.seatColor || '#35416b'), soldC = [46, 46, 52];
+    const seatC = [38, 190, 170], soldC = [44, 46, 54];
     const recl = a.seatWidth >= 0.8;
     r.seats.forEach(s => {
       const w = a.seatWidth * 0.44, f = s.floor, z = s.z;
       box(s.x - w, s.x + w, f + 0.28, f + 0.48, z - (recl ? 0.45 : 0.32), z + 0.12, s.sold ? soldC : seatC, s.id, s.sold);
       box(s.x - w, s.x + w, f + 0.28, f + (recl ? 1.08 : 0.98), z + 0.12, z + 0.24, s.sold ? soldC : seatC, s.id, s.sold);
-      if (opt.crowd && s.sold && s.id !== opt.self) {
+      if (opt.crowd !== false && s.sold && s.id !== opt.self) {
         out.push({ circle: [s.x, s.eye + 0.04, z], r: 0.11, col: [52, 48, 56], layer: 20, seat: s.id });
         quad([[s.x - 0.22, s.eye - 0.38, z + 0.02], [s.x + 0.22, s.eye - 0.38, z + 0.02], [s.x + 0.2, s.eye - 0.12, z + 0.02], [s.x - 0.2, s.eye - 0.12, z + 0.02]], [52, 48, 56], 20, null, { seat: s.id });
       }
@@ -154,8 +158,13 @@ const SeatSight = (() => {
 
   // ---------- Camera ----------
   const eyeCam = (r, s) => look([s.x, s.eye, s.z], [0, r.bottom + r.H / 2, 0]);
-  // Dollhouse view from behind and above; the back wall and ceiling are culled so you see every seat.
-  const overCam = r => look([0, r.ceil + 3, r.back + 2.5], [0, r.rows[0].floor, r.back * 0.45]);
+  // Dollhouse view from behind and above, close enough that the seats fill the frame.
+  // Ceiling and back wall are skipped in this view (render opt.map).
+  const overCam = r => {
+    const z0 = r.rows[0].z, last = r.rows[r.rows.length - 1], t = [0, last.floor * 0.5, (z0 + r.back) / 2 - 1];
+    const D = Math.max(r.roomW * 0.62, (r.back - z0) * 0.85) + 2, el = rad(58);
+    return look([0, t[1] + D * Math.sin(el), t[2] + D * Math.cos(el)], t);
+  };
   function look(pos, t) {
     const dx = t[0] - pos[0], dy = t[1] - pos[1], dz = t[2] - pos[2];
     return { pos, yaw: Math.atan2(dx, -dz), pitch: Math.atan2(dy, Math.hypot(dx, dz)), zoom: 1 };
@@ -173,7 +182,7 @@ const SeatSight = (() => {
     const f = Math.min(w / 2 / Math.tan(rad(45)), h / 2 / Math.tan(rad(37))) * cam.zoom;
     const [px, py, pz] = cam.pos;
     const toCam = ([x, y, z]) => { const vx = x - px, vy = y - py, vz = z - pz; return [vx * rt[0] + vy * rt[1] + vz * rt[2], vx * up[0] + vy * up[1] + vz * up[2], vx * fw[0] + vy * fw[1] + vz * fw[2]]; };
-    const proj = q => [w / 2 + (f * q[0]) / q[2], h / 2 - (f * q[1]) / q[2]];
+    const proj = q => [w / 2 + (f * q[0]) / q[2], h * api.centerY - (f * q[1]) / q[2]];
     return { f, px, py, pz, toCam, proj };
   }
 
@@ -206,7 +215,7 @@ const SeatSight = (() => {
     const { f, px, py, pz, toCam, proj } = view(cam, w, h);
     const items = [];
     for (const poly of polys) {
-      if (opt.hide && poly.seat === opt.hide) continue;
+      if ((opt.hide && poly.seat === opt.hide) || (opt.map && poly.shell)) continue;
       if (poly.circle) {
         const q = toCam(poly.circle);
         if (q[2] > NEAR) items.push({ poly, d: q[2], c: proj(q), rr: (f * poly.r) / q[2] });
@@ -225,18 +234,26 @@ const SeatSight = (() => {
     for (const it of items) {
       const p = it.poly;
       let col = p.col;
-      if (opt.map && p.sold !== undefined) col = p.sold ? [58, 58, 66] : [70, 120, 205]; // room view: map colors
-      if (p.seat && p.seat === opt.highlight) col = [255, 196, 60];
+      if (p.seat && p.seat === opt.highlight && !p.circle) col = [255, 92, 122];
       let k = 1;
       if (!p.emit) {
         const lit = p.n ? Math.max(0, p.n[0] * L[0] + p.n[1] * L[1] + p.n[2] * L[2]) : 0.5;
-        k = (0.45 + 0.75 * lit) / (opt.map ? 1 : 1 + it.d * 0.03);
+        k = (0.45 + 0.75 * lit) / (opt.map ? 1 : 1 + it.d * (p.seat ? 0.012 : 0.03));
       }
       ctx.fillStyle = `rgb(${col[0] * k | 0},${col[1] * k | 0},${col[2] * k | 0})`;
       ctx.beginPath();
       if (it.c) ctx.arc(it.c[0], it.c[1], Math.max(0.5, it.rr), 0, Math.PI * 2);
       else { ctx.moveTo(it.pts[0][0], it.pts[0][1]); for (let i = 1; i < it.pts.length; i++) ctx.lineTo(it.pts[i][0], it.pts[i][1]); }
       ctx.fill();
+    }
+    if (opt.pin) { // marker above your seat in the room view
+      const q = toCam(opt.pin);
+      if (q[2] > NEAR) {
+        const [x, y] = proj(q), rr = Math.max(7, (f * 0.32) / q[2]);
+        ctx.beginPath(); ctx.moveTo(x, y + rr * 2.2); ctx.lineTo(x - rr * 0.7, y + rr * 0.6); ctx.lineTo(x + rr * 0.7, y + rr * 0.6); ctx.fillStyle = '#ff5c7a'; ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, rr * 0.4, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+      }
     }
   }
 
@@ -273,5 +290,6 @@ const SeatSight = (() => {
     return row.seats.reduce((b, s) => (Math.abs(s.x - fx * row.width / 2) < Math.abs(b.x - fx * row.width / 2) ? s : b));
   }
 
-  return { build, scene, render, pick, eyeCam, overCam, lerpCam, similarSeat };
+  const api = { build, scene, render, pick, eyeCam, overCam, lerpCam, similarSeat, centerY: 0.5 };
+  return api;
 })();

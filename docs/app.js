@@ -1,24 +1,27 @@
-// SeatSight web UI: movie > showtime > seat flow, 3D seat view with room overview, compare, share.
+// SeatSight web UI: movie > showtime > seat, then a 3D view from the seat.
 (() => {
   const $ = id => document.getElementById(id);
   const S = SeatSight;
   const COMPARE = ['imax-190', 'ultraavx', 'regular-large', 'vip'];
   const TIMES = ['11:30', '13:15', '14:40', '16:10', '17:45', '19:00', '20:20', '21:40', '22:50'];
-  const WHY = {
-    IMAX: 'Biggest, tallest screen and steep seating. Scenes shot for IMAX fill more of the frame.',
-    UltraAVX: 'Wall-to-wall screen, reclining seats, big sound.',
-    Regular: 'Standard screen and seats.',
-    VIP: '19+, full recliners, food to your seat. Smaller screen.',
+  const ABOUT = { IMAX: 'Biggest screen, steep seating', UltraAVX: 'Wall-to-wall screen, recliners', Regular: 'Classic screen', VIP: '19+, recliners, food to your seat' };
+  const svg = p => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  const ICON = {
+    screen: svg('<rect x="3" y="5" width="18" height="11" rx="2"/><path d="M8 20h8"/>'),
+    neck: svg('<path d="M12 19V5M6 11l6-6 6 6"/>'),
+    heads: svg('<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-4 4-6 7-6s6 2 7 6"/>'),
+    center: svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/>'),
   };
-  let D, movie, show, cfg, room, polys, seat, cam, anim = null, compareOn = false, overview = false;
-  const st = { theatre: 'harbourfront', day: 0, heat: false, crowd: false };
+  let D, movie, show, room, polys, seat, chosen, cam, anim = null, compareOn = false, roomMode = false;
+  const st = { theatre: 'harbourfront', day: 0, best: false };
 
   const hash = s => { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
   const preset = id => D.auditoriums.find(a => a.id === id);
   const theatre = () => D.theatres.find(t => t.id === st.theatre);
-  const dayLabel = k => k === 0 ? 'Today' : k === 1 ? 'Tomorrow' : new Date(Date.now() + k * 864e5).toLocaleDateString('en-CA', { weekday: 'short', day: 'numeric' });
+  const date = k => new Date(Date.now() + k * 864e5);
+  const dayName = k => k === 0 ? 'Today' : k === 1 ? 'Tomorrow' : date(k).toLocaleDateString('en-CA', { weekday: 'long' });
   const filmFor = (m, fmt) => m.film === 'imax' ? (fmt === 'IMAX' ? 0 : 2.39) : +m.film;
-  const fmtName = m => m.film === 'imax' ? 'Filmed for IMAX' : m.film === '2.39' ? 'Scope 2.39:1' : 'Flat 1.85:1';
+  const seatName = s => `Row ${room.rows[s.row].label} · Seat ${s.num}`;
 
   fetch('auditoriums.json').then(r => r.json()).then(d => {
     D = d;
@@ -30,34 +33,31 @@
     if (D.theatres.some(t => t.id === h.get('t'))) st.theatre = h.get('t');
     st.day = Math.max(0, Math.min(6, +h.get('d') || 0));
     $('theatre').value = st.theatre;
-    const m = D.movies.find(m => m.id === h.get('m'));
-    if (!m) return go('movies');
-    movie = m;
-    if (!h.get('fmt') || !h.get('at') || !m.formats.includes(h.get('fmt'))) return go('times');
-    openShow(h.get('fmt'), h.get('at'), h.get('sw') && { w: +h.get('sw'), f: +h.get('fr'), k: +h.get('rk') });
-    const s = h.get('seat') && room.seats.find(s => s.id === h.get('seat'));
-    if (s) { seat = s; drawMap(); open(s); }
+    movie = D.movies.find(m => m.id === h.get('m'));
+    if (!movie) return go('movies');
+    if (!movie.formats.includes(h.get('fmt')) || !h.get('at')) return go('times');
+    openShow(h.get('fmt'), h.get('at'));
+    const s = room.seats.find(s => s.id === h.get('seat') && !s.sold);
+    if (s) { chosen = s; drawMap(); open(s); }
   }
 
-  // ---------- steps ----------
-  function go(step) {
-    ['movies', 'times', 'seats'].forEach(s => $('s-' + s).hidden = s !== step);
-    $('tray').hidden = step !== 'seats' || !seat;
-    const names = [['movies', 'Movie'], ['times', 'Showtime'], ['seats', 'Seats']];
-    const at = names.findIndex(n => n[0] === step);
-    $('steps').innerHTML = names.map(([id, n], i) => `<button data-step="${id}" class="${i === at ? 'on' : ''}" ${i > at ? 'disabled' : ''}>${i + 1}. ${n}</button>`).join('<span>›</span>');
-    if (step === 'movies') drawMovies();
-    if (step === 'times') drawTimes();
-    if (step !== 'seats') setHash({ m: step === 'times' ? movie.id : null });
+  // ---------- pages ----------
+  let page = 'movies';
+  function go(p) {
+    page = p;
+    ['movies', 'times', 'seats'].forEach(x => $('p-' + x).hidden = x !== p);
+    $('back').hidden = p === 'movies';
+    $('place').hidden = p === 'seats';
+    $('dock').hidden = p !== 'seats';
+    if (p === 'movies') { $('title').innerHTML = '<span class="brand">Seat<i>Sight</i></span>'; drawMovies(); setHash({}); }
+    if (p === 'times') { $('title').innerHTML = ''; drawTimes(); setHash({ m: movie.id }); }
+    if (p === 'seats') $('title').innerHTML = `<b>${movie.title}</b><span>${show.fmt} · ${dayName(st.day)} ${show.at} · ${theatre().name}</span>`;
     scrollTo(0, 0);
   }
-  $('steps').onclick = e => { const s = e.target.dataset.step; if (s) { if (s !== 'seats') seat = null; go(s); } };
-  $('theatre').onchange = e => {
-    st.theatre = e.target.value;
-    if (!$('s-seats').hidden) { seat = null; go('times'); } else if (!$('s-times').hidden) drawTimes();
-  };
+  $('back').onclick = () => { if (page === 'seats') { chosen = null; go('times'); } else go('movies'); };
+  $('theatre').onchange = e => { st.theatre = e.target.value; if (page === 'times') go('times'); };
 
-  const poster = (m, small) => `<div class="poster" style="background:linear-gradient(160deg,${m.colors[0]} 30%,${m.colors[1]}55);--c1:${m.colors[1]}">${!small && m.film === 'imax' ? '<span class="tag">FILMED FOR IMAX</span>' : ''}<b>${m.title}</b></div>`;
+  const poster = m => `<div class="poster" style="background:linear-gradient(160deg,${m.colors[0]} 35%,${m.colors[1]}66);--c1:${m.colors[1]}"><b>${m.title}</b></div>`;
   const meta = m => `${m.genre} · ${Math.floor(m.runtime / 60)}h ${m.runtime % 60}m · ${m.rating}`;
 
   function drawMovies() {
@@ -65,94 +65,57 @@
   }
   $('movies').onclick = e => { const b = e.target.closest('[data-m]'); if (b) { movie = D.movies.find(m => m.id === b.dataset.m); go('times'); } };
 
-  function showtimes(fmt) {
-    const h = hash(movie.id + st.theatre + st.day + fmt), n = fmt === 'VIP' ? 2 : 3;
-    return Array.from({ length: n }, (_, k) => TIMES[(h % 4) + k * 2]);
-  }
+  const times = fmt => { const h = hash(movie.id + st.theatre + st.day + fmt); return Array.from({ length: fmt === 'VIP' ? 2 : 3 }, (_, k) => TIMES[(h % 4) + k * 2]); };
   function drawTimes() {
-    $('mhead').innerHTML = `${poster(movie, true)}<div><h2>${movie.title}</h2><p>${meta(movie)} · ${fmtName(movie)}</p><p>${theatre().name}</p></div>`;
-    $('days').innerHTML = Array.from({ length: 7 }, (_, k) => `<button data-d="${k}" aria-pressed="${k === st.day}">${dayLabel(k)}</button>`).join('');
-    $('formats').innerHTML = movie.formats.map(fmt => {
-      const a = preset(theatre().rooms[fmt]), aud = Object.keys(theatre().rooms).indexOf(fmt) + 1;
-      return `<div class="fmt"><h3>${a.name} <small>${a.variant} · Auditorium ${aud} · ${a.screen.width} m screen</small></h3>
-        <div class="why">${WHY[fmt]}</div>
-        <div class="times">${showtimes(fmt).map(t => `<button data-fmt="${fmt}" data-at="${t}">${t}</button>`).join('')}</div></div>`;
-    }).join('');
+    $('hero').innerHTML = `${poster(movie)}<div><h1>${movie.title}</h1><div class="dim">${meta(movie)}</div>${movie.film === 'imax' ? '<div class="dim">Filmed for IMAX</div>' : ''}</div>`;
+    $('days').innerHTML = Array.from({ length: 7 }, (_, k) => `<button data-d="${k}" aria-pressed="${k === st.day}">${k < 2 ? dayName(k) : date(k).toLocaleDateString('en-CA', { weekday: 'short' })}<b>${date(k).getDate()}</b></button>`).join('');
+    $('formats').innerHTML = movie.formats.map(fmt => `<div class="fmt"><h3>${fmt}</h3><p>${ABOUT[fmt]}</p>
+      <div class="times">${times(fmt).map(t => `<button data-fmt="${fmt}" data-at="${t}">${t}</button>`).join('')}</div></div>`).join('');
   }
-  $('days').onclick = e => { const d = e.target.dataset.d; if (d) { st.day = +d; drawTimes(); } };
-  $('formats').onclick = e => { const b = e.target.dataset; if (b.at) { seat = null; openShow(b.fmt, b.at); } };
+  $('days').onclick = e => { const b = e.target.closest('[data-d]'); if (b) { st.day = +b.dataset.d; drawTimes(); } };
+  $('formats').onclick = e => { const b = e.target.dataset; if (b.at) { chosen = null; openShow(b.fmt, b.at); setHash(); } };
 
-  // ---------- seats ----------
-  function openShow(fmt, at, tw) {
-    const a = preset(theatre().rooms[fmt]);
+  function openShow(fmt, at) {
     show = { fmt, at, film: filmFor(movie, fmt), seed: movie.id + st.theatre + st.day + fmt + at };
-    cfg = structuredClone(a);
-    if (tw) { cfg.screen.width = tw.w; cfg.firstRow = tw.f; cfg.riser = tw.k; }
-    [['tw', cfg.screen.width], ['tf', cfg.firstRow], ['tk', cfg.riser]].forEach(([id, v]) => setSlider(id, v));
-    rebuild();
-    $('shead').innerHTML = `${poster(movie, true)}<div><h2>${movie.title}</h2><p>${cfg.name} · ${cfg.variant}</p><p>${dayLabel(st.day)} ${at} · ${theatre().name}</p></div>`;
+    room = S.build(preset(theatre().rooms[fmt]), show.seed);
     go('seats');
-    setHash();
+    drawMap();
   }
-  function setSlider(id, v) { $(id).value = v; $(id).nextElementSibling.textContent = v + ' m'; }
-  function tweaked() { const b = preset(cfg.id); return cfg.screen.width !== b.screen.width || cfg.firstRow !== b.firstRow || cfg.riser !== b.riser; }
-  function setHash(over = {}) {
+  function setHash(o = { all: true }) {
     const h = new URLSearchParams({ t: st.theatre, d: st.day });
-    const m = 'm' in over ? over.m : movie?.id;
-    if (m) h.set('m', m);
-    if (!('m' in over) && show) {
-      h.set('fmt', show.fmt); h.set('at', show.at);
-      if (seat) h.set('seat', seat.id);
-      if (tweaked()) { h.set('sw', cfg.screen.width); h.set('fr', cfg.firstRow); h.set('rk', cfg.riser); }
-    }
+    if (o.m) h.set('m', o.m);
+    if (o.all && movie && show) { h.set('m', movie.id); h.set('fmt', show.fmt); h.set('at', show.at); if (chosen) h.set('seat', chosen.id); }
     history.replaceState(null, '', '#' + h);
   }
 
-  function rebuild() {
-    room = S.build(cfg, show.seed);
-    if (seat) seat = room.seats.find(s => s.id === seat.id && !s.sold) || null;
-    drawMap();
-  }
+  // ---------- seat map ----------
   function drawMap() {
     const map = $('map');
-    const cols = Math.max(...room.rows.map(r => r.seats.length + (r.parts.length - 1) * 1.4)) + 3;
-    map.style.setProperty('--s', Math.max(11, Math.min(26, (map.clientWidth - 24) / cols - 2)) + 'px');
-    const heat = s => `hsl(${s.m.score * 1.2},65%,45%)`;
-    map.innerHTML = `<div class="screen" style="width:${Math.min(92, 40 + room.W * 2.2)}%">${cfg.name} screen · ${room.W.toFixed(1)} m wide</div>` +
-      room.rows.map(r => {
-        let html = `<div class="row"><b>${r.label}</b>`, p = 0;
-        r.seats.forEach(s => {
-          if (s.section !== p) { html += '<span class="aisle"></span>'; p = s.section; }
-          const cls = `seat${s.sold ? ' sold' : ''}${s === room.best ? ' best' : ''}${s === seat ? ' sel' : ''}`;
-          const bg = st.heat && !s.sold ? ` style="background:${heat(s)}"` : '';
-          html += `<button class="${cls}" data-id="${s.id}"${bg}${s.sold ? ' disabled' : ''} title="${s.id} · ${s.sold ? 'taken' : 'score ' + s.m.score}" aria-label="Seat ${s.id}, ${s.sold ? 'taken' : 'score ' + s.m.score}"></button>`;
-        });
-        return html + `<b>${r.label}</b></div>`;
-      }).join('') +
-      `<div class="legend"><span><i style="background:var(--seat)"></i>Available</span><span><i style="background:var(--sold)"></i>Taken</span><span><i style="background:var(--accent)"></i>Your seat</span><span><i style="box-shadow:inset 0 0 0 2px var(--accent)"></i>Best seat</span>${st.heat ? '<span><i style="background:hsl(0,65%,45%)"></i>Poor → <i style="background:hsl(120,65%,45%)"></i>Great</span>' : ''}</div>`;
-    $('best').textContent = `Best open seat: ${room.best.id} (${room.best.m.score})`;
-    tray();
+    const cols = Math.max(...room.rows.map(r => r.seats.length + (r.parts.length - 1) * 1.2)) + 2.5;
+    map.style.setProperty('--s', Math.max(15, Math.min(24, (Math.min(map.clientWidth, 940) - 20) / cols - 3)) + 'px');
+    map.classList.toggle('best', st.best);
+    map.innerHTML = '<div class="grid"><div class="screen"><span>SCREEN</span></div>' + room.rows.map(r => {
+      let html = `<div class="row"><b>${r.label}</b>`, p = 0;
+      r.seats.forEach(s => {
+        if (s.section !== p) { html += '<span class="gap"></span>'; p = s.section; }
+        const cls = `seat${s.sold ? ' taken' : ''}${s.m.score >= 85 ? ' top' : ''}${s === chosen ? ' mine' : ''}`;
+        html += `<button class="${cls}" data-id="${s.id}"${s.sold ? ' disabled' : ''} aria-label="${seatName(s)}, ${s.sold ? 'taken' : s.m.verdict}" title="${seatName(s)} · ${s.sold ? 'Taken' : s.m.verdict}"></button>`;
+      });
+      return html + `<b>${r.label}</b></div>`;
+    }).join('') + `</div><div class="legend"><span><i style="background:var(--open)"></i>Open</span><span><i style="background:var(--taken)"></i>Taken</span><span><i style="background:var(--pick)"></i>Your seat</span></div>`;
+    map.scrollLeft = (map.scrollWidth - map.clientWidth) / 2;
+    dock();
   }
-  function tray() {
-    $('tray').hidden = !seat || $('s-seats').hidden;
-    if (seat) $('sum').innerHTML = `<b>Seat ${seat.id}</b> · score ${seat.m.score}<br>${cfg.name} · ${dayLabel(st.day)} ${show.at}`;
+  function dock() {
+    if (!chosen) { $('what').innerHTML = '<b>Pick a seat</b><span class="dim">Tap any open seat to see your view</span>'; $('preview').disabled = true; return; }
+    $('what').innerHTML = `<b>${seatName(chosen)}</b><span class="verdict ${chosen.m.tone}">${chosen.m.verdict}</span>`;
+    $('preview').disabled = false;
   }
-
-  $('map').addEventListener('click', e => { const id = e.target.dataset?.id; if (id) select(room.seats.find(s => s.id === id), true); });
-  $('heat').onclick = e => { st.heat = !st.heat; e.target.setAttribute('aria-pressed', st.heat); drawMap(); };
-  $('crowd').onclick = e => { st.crowd = !st.crowd; e.target.setAttribute('aria-pressed', st.crowd); };
-  $('best').onclick = () => select(room.best, true);
-  $('see').onclick = () => seat && open(seat);
-  [['tw', v => cfg.screen.width = v], ['tf', v => cfg.firstRow = v], ['tk', v => cfg.riser = v]].forEach(([id, set]) => {
-    $(id).oninput = e => { const v = +e.target.value; set(v); setSlider(id, v); rebuild(); setHash(); };
-  });
-  addEventListener('resize', () => { if (room && !$('s-seats').hidden) drawMap(); draw(); });
-
-  function select(s, view) {
-    if (!s || s.sold) return;
-    seat = s; drawMap(); setHash();
-    if (view) open(s);
-  }
+  $('map').addEventListener('click', e => { const s = room.seats.find(s => s.id === e.target.dataset?.id); if (s && !s.sold) { chosen = s; drawMap(); setHash(); open(s); } });
+  $('bestOn').onclick = e => { st.best = !st.best; e.currentTarget.setAttribute('aria-pressed', st.best); drawMap(); };
+  $('pickBest').onclick = () => { chosen = room.best; drawMap(); setHash(); open(room.best); };
+  $('preview').onclick = () => chosen && open(chosen);
+  addEventListener('resize', () => { if (page === 'seats') drawMap(); draw(); });
 
   // ---------- 3D view ----------
   const canvas = $('c'), ctx = canvas.getContext('2d');
@@ -160,26 +123,30 @@
   function open(s) {
     const was = isOpen();
     seat = s;
-    polys = S.scene(room, { film: show.film, crowd: st.crowd, self: s.id });
+    polys = S.scene(room, { film: show.film, self: s.id });
     $('view').classList.add('open');
     document.body.style.overflow = 'hidden';
-    setOverview(false);
+    setRoom(false, true);
     fly(was && cam ? cam : S.overCam(room), S.eyeCam(room, s), was ? 700 : 1400);
-    hud(); drawMap(); setHash();
+    sheet();
+    if (!was) hint('Drag to look around. Pinch out to see the whole room.');
     if (compareOn) drawCompare();
   }
   function close() {
-    $('view').classList.remove('open', 'cmp'); document.body.style.overflow = '';
-    compareOn = false; $('compare').classList.remove('open'); $('cmp').textContent = 'Compare';
-    drawMap();
+    $('view').classList.remove('open', 'cmp', 'room'); document.body.style.overflow = '';
+    compareOn = false; $('compare').classList.remove('open');
   }
-  function setOverview(on) {
-    overview = on;
-    $('view').classList.toggle('ov', on);
-    $('ov').setAttribute('aria-pressed', on); $('ov').textContent = on ? 'My seat' : 'Room view';
-    $('hint').textContent = on ? 'Yellow is your seat, dark seats are taken. Tap an open seat to switch.' : 'Drag to look around · pinch or scroll out for the room view · tap a seat to switch';
+  function setRoom(on, quiet) {
+    roomMode = on;
+    $('view').classList.toggle('room', on);
+    $('mYou').setAttribute('aria-pressed', !on); $('mRoom').setAttribute('aria-pressed', on);
+    if (!quiet) { fly(cam, on ? S.overCam(room) : S.eyeCam(room, seat), 900); if (on) hint('Tap any teal seat to move there'); }
   }
-  $('ov').onclick = () => { setOverview(!overview); fly(cam, overview ? S.overCam(room) : S.eyeCam(room, seat), 900); };
+  $('mYou').onclick = () => roomMode && setRoom(false);
+  $('mRoom').onclick = () => !roomMode && setRoom(true);
+  function hint(t) { const el = $('hint'); el.textContent = t; el.style.opacity = 1; clearTimeout(el._t); el._t = setTimeout(() => el.style.opacity = 0, 3500); }
+  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 1400); }
+
   function fly(from, to, ms) {
     const t0 = performance.now();
     cancelAnimationFrame(anim);
@@ -195,29 +162,21 @@
     const dpr = Math.min(2, devicePixelRatio || 1), w = canvas.clientWidth, h = canvas.clientHeight;
     if (canvas.width !== w * dpr || canvas.height !== h * dpr) { canvas.width = w * dpr; canvas.height = h * dpr; }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    S.centerY = w < 640 && !roomMode && !compareOn ? 0.36 : 0.5;
     const near = Math.hypot(cam.pos[0] - seat.x, cam.pos[1] - seat.eye, cam.pos[2] - seat.z) < 1;
-    S.render(ctx, w, h, polys, cam, { highlight: seat.id, hide: near ? seat.id : null, map: overview });
+    S.render(ctx, w, h, polys, cam, { highlight: seat.id, hide: near ? seat.id : null, map: roomMode, pin: roomMode ? [seat.x, seat.eye + 0.9, seat.z] : null });
   }
-  function pictureNote() {
-    const aspect = cfg.screen.aspect;
-    if (!show.film) return `Filmed for IMAX, fills this ${aspect}:1 screen. ${Math.round((2.39 / aspect - 1) * 100)}% more picture than a 2.39 room`;
-    if (Math.abs(show.film - aspect) < 0.06) return `${show.film}:1 movie fills the screen`;
-    return show.film > aspect ? `${show.film}:1 movie, bars above and below` : `${show.film}:1 movie, bars on the sides`;
+  function sheet() {
+    const m = seat.m, isChosen = chosen === seat;
+    $('sheet').innerHTML = `<div class="top"><div><b>${seatName(seat)}</b><span class="dim">${show.fmt} · ${movie.title} · ${show.at}</span></div><span class="verdict ${m.tone}">${m.verdict}</span></div>
+      <ul class="facts">${m.facts.map(f => `<li class="${f.ok ? '' : 'warn'}"><span class="ico">${ICON[f.k]}</span><div>${f.t}${f.sub ? `<small>${f.sub}</small>` : ''}</div></li>`).join('')}</ul>
+      <button class="more" id="more">${(n => n ? n + (n > 1 ? ' things' : ' thing') + ' to know · ' : '')(m.facts.filter(f => !f.ok).length)}See details ›</button>
+      <div class="est">An estimate from a typical room and average height. Real rooms and people vary.</div>
+      <button class="cta" id="choose">${isChosen ? 'Back to seat map' : 'Choose this seat'}</button>`;
+    $('sheet').classList.toggle('mini', innerWidth < 640);
+    $('more').onclick = () => $('sheet').classList.remove('mini');
+    $('choose').onclick = () => { chosen = seat; drawMap(); setHash(); close(); };
   }
-  function hud() {
-    const m = seat.m, col = `hsl(${m.score * 1.2},70%,55%)`;
-    const c = m.c === null ? 'Front row, nobody ahead' : m.c >= 0.09 ? 'Clear view over heads' : m.c >= 0.06 ? 'Just clears heads' : 'May block the bottom';
-    $('hud').innerHTML = `<h2>Seat ${seat.id}<span class="score" style="color:${col}">${m.score}</span></h2>
-      <div class="sub">${movie.title} · ${cfg.name} ${cfg.variant} · row ${seat.row + 1} of ${room.rows.length}</div>
-      <dl><dt>Screen fills</dt><dd>${Math.round(m.h)}° of your view (ideal ${cfg.idealAngle}°)</dd>
-      <dt>Feels like</dt><dd>a ${m.tv}" TV from your couch</dd>
-      <dt>Picture</dt><dd>${pictureNote()}</dd>
-      <dt>Look up</dt><dd>${Math.round(m.neck)}° to the top edge</dd>
-      <dt>Distance</dt><dd>${seat.z.toFixed(1)} m from the screen</dd>
-      <dt>Head in front</dt><dd>${c}</dd></dl>
-      <ul>${m.notes.map(n => `<li>${n}</li>`).join('')}</ul>`;
-  }
-  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 1400); }
 
   // drag to look, wheel/pinch to zoom, tap a seat to switch
   const pts = new Map(); let pinch = 0, down = null;
@@ -241,32 +200,32 @@
   const up = e => {
     pts.delete(e.pointerId); pinch = 0;
     if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6 && performance.now() - down.t < 400) {
-      const r = canvas.getBoundingClientRect(), id = S.pick(r.width, r.height, polys, cam, e.clientX - r.left, e.clientY - r.top);
+      S.centerY = r0(); const r = canvas.getBoundingClientRect(), id = S.pick(r.width, r.height, polys, cam, e.clientX - r.left, e.clientY - r.top);
       const s = id && room.seats.find(s => s.id === id);
-      if (s && s.sold) toast(`Seat ${s.id} is taken`);
+      if (s && s.sold) toast(`${seatName(s)} is taken`);
       else if (s && s !== seat) open(s);
     }
     down = null;
   };
   canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
   canvas.addEventListener('wheel', e => { e.preventDefault(); zoom(Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+  function r0() { return canvas.clientWidth < 640 && !roomMode ? 0.36 : 0.5; }
   function zoom(f) {
-    if (!overview && cam.zoom * f < 0.7) { setOverview(true); fly(cam, S.overCam(room), 900); pinch = 0; return; }
+    if (!roomMode && cam.zoom * f < 0.7) { setRoom(true); pinch = 0; return; }
     cam.zoom = Math.max(0.6, Math.min(4, cam.zoom * f)); draw();
   }
 
+  // arrow keys move to the next open seat
   function move(dx, dr) {
     let s = seat;
-    for (let n = 0; n < 30; n++) {
-      const row = room.rows[Math.max(0, Math.min(room.rows.length - 1, s.row + dr))];
-      const next = dr ? row.seats.filter(q => !q.sold || q === seat).reduce((b, q) => (Math.abs(q.x - seat.x) < Math.abs(b.x - seat.x) ? q : b), row.seats[0])
-        : row.seats[Math.max(0, Math.min(row.seats.length - 1, row.seats.indexOf(s) + dx))];
-      if (next === s) return;
-      s = next;
+    for (let n = 0; n < 40; n++) {
+      const row = room.rows[s.row + dr];
+      if (!row) return;
+      s = dr ? row.seats.reduce((b, q) => (Math.abs(q.x - seat.x) < Math.abs(b.x - seat.x) ? q : b)) : row.seats[row.seats.indexOf(s) + dx];
+      if (!s) return;
       if (!s.sold) return open(s);
     }
   }
-  $('nav').onclick = e => { const d = e.target.dataset.d; if (d) move(...d.split(',').map(Number)); };
   addEventListener('keydown', e => {
     if (!isOpen()) return;
     const k = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
@@ -276,16 +235,16 @@
   $('close').onclick = close;
 
   $('share').onclick = async () => {
-    const text = `Seat ${seat.id} for ${movie.title} in ${cfg.name}: the screen fills ${Math.round(seat.m.h)}° of my view, like a ${seat.m.tv}" TV. Score ${seat.m.score}/100.`;
+    setHash();
+    const text = `${seatName(seat)} for ${movie.title} in ${show.fmt}: ${seat.m.verdict.toLowerCase()}, like a ${seat.m.tv}" TV.`;
     try { if (navigator.share) return await navigator.share({ title: 'SeatSight', text, url: location.href }); } catch { return; }
     try { await navigator.clipboard.writeText(location.href); toast('Link copied'); } catch {}
   };
 
-  // same relative seat across formats, same movie
+  // the same spot in each screen type
   $('cmp').onclick = () => {
     compareOn = !compareOn;
     $('compare').classList.toggle('open', compareOn); $('view').classList.toggle('cmp', compareOn);
-    $('cmp').textContent = compareOn ? 'My seat' : 'Compare';
     if (compareOn) drawCompare();
   };
   function drawCompare() {
@@ -295,9 +254,9 @@
       const r = S.build(preset(id), show.seed), s = S.similarSeat(room, seat, r);
       const fig = box.children[i], cv = fig.querySelector('canvas'), dpr = Math.min(2, devicePixelRatio || 1);
       cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
-      const c2 = cv.getContext('2d'); c2.setTransform(dpr, 0, 0, dpr, 0, 0);
-      S.render(c2, cv.clientWidth, cv.clientHeight, S.scene(r, { film: filmFor(movie, r.a.format), crowd: st.crowd, self: s.id }), S.eyeCam(r, s), { hide: s.id });
-      fig.querySelector('figcaption').textContent = `${r.a.name} ${r.a.variant.split(',')[0]} · seat ${s.id} · ${Math.round(s.m.h)}° · ${s.m.tv}" TV · ${s.m.score}`;
+      S.centerY = 0.5; const c2 = cv.getContext('2d'); c2.setTransform(dpr, 0, 0, dpr, 0, 0);
+      S.render(c2, cv.clientWidth, cv.clientHeight, S.scene(r, { film: filmFor(movie, r.a.format), self: s.id }), S.eyeCam(r, s), { hide: s.id });
+      fig.querySelector('figcaption').innerHTML = `<b>${r.a.format}</b><span class="${s.m.tone}">${s.m.verdict}</span> · like a ${s.m.tv}" TV`;
     }));
   }
 })();

@@ -8,17 +8,16 @@ Every time I book a movie I stare at a grid of little squares and guess. Row F i
 
 ## What it does
 - Booking-style flow: pick a theatre, a movie, a showtime by screen type, then a seat (movies and theatres are made up)
-- Seat map like the booking apps, for IMAX (1.90:1 and the rare 1.43:1 GT), UltraAVX, Regular (large and small) and VIP rooms
-- Tap a seat to fly from the back of the room into it. Drag to look around, pinch or scroll to zoom, arrows to try the seat next to you
-- A seat score from 0 to 100 based on how much of your view the screen fills, how far you look up, how far off-center you are, and whether the head in front clears the bottom of the screen
-- "Feels like a 140-inch TV from your couch" so the number means something
-- Best seats heatmap and a best seat button
-- The movie is one fixed picture and each screen crops it, so a movie filmed for IMAX shows more sky and foreground on a 1.43:1 GT screen than on a 1.90 one, and a scope movie gets bars on an IMAX screen
-- Room view: pinch out (or tap Room view) to see the whole room from above, with your seat in yellow and taken seats dark. Tap any open seat to fly into it
-- Crowd mode: heads in the sold seats, so you can see who blocks the subtitles
-- Compare: the same seat in IMAX, UltraAVX, Regular and VIP side by side
-- Adjust the room (screen width, first row distance, rake) to match a theatre you know
-- Share link with the room and seat in it
+- Tap a seat and you fly into it in 3D. Drag to look around
+- Open seats are teal, taken seats have someone sitting in them, so you see who's in front of you
+- Pinch out for the whole room from above, with a pin on your seat. Tap any open seat to move there
+- A plain verdict (Great, Good, Okay, Not ideal) and four simple lines: screen size ("like a 147-inch TV at home"), neck comfort, heads in front, and how centered you are
+- "Show best seats" and "Pick the best seat for me"
+- Each screen crops the same movie frame, so IMAX looks taller and a scope movie gets bars on an IMAX screen
+- Compare: the same spot in IMAX, UltraAVX, Regular and VIP side by side
+
+## How accurate is it?
+It's an estimate, and the app says so. Room sizes are typical values, not measured plans. The "heads in front" line uses an average seated eye height and also checks a person about 10 cm taller, because people vary. Real auditorium drawings would make it exact.
 
 ## Why it's cheap to add to a real app
 - No 3D engine and no dependencies. A small renderer draws a few thousand flat polygons to a canvas. About 20 KB of JS on web, four Swift files on iOS

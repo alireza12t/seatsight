@@ -26,6 +26,13 @@ Pick a seat, see the screen from it. Web + iOS, no server, no 3D engine.
 - [x] Room view: zoom out to see the room from above, your seat yellow, taken seats dark, tap to switch
 - [x] Taken seats show in 3D and can't be picked; arrows skip taken seats
 
+## v1.2 (2026-11-08): buyer-friendly redesign
+- [x] Modern UI on web and iOS: clean dark design, bottom dock, bottom sheet in 3D, compact on phones
+- [x] Verdict + four plain lines replace degrees and meters; worded as estimates; tall-person check for heads in front
+- [x] Open seats teal, taken seats show a person, your seat coral with a pin in the room view
+- [x] Removed room sliders, crowd toggle, technical format text
+- [x] Bigger tappable seats on phones (map scrolls sideways, centered)
+
 ## Open items / next
 - [ ] Real room data. Ask Cineplex (or theatre fans) for measured drawings per auditorium
 - [ ] iOS gyro look-around (CoreMotion)

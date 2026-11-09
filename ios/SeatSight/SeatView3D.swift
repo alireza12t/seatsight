@@ -5,36 +5,41 @@ struct SeatView3D: View {
     let room: Room
     @State var seat: Seat
     let show: Show
-    let crowd: Bool
-    var onSelect: (Seat) -> Void = { _ in }
+    var onChoose: (Seat) -> Void = { _ in }
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var polys: [Poly] = []
     @State private var cam = Camera(pos: .zero, yaw: 0, pitch: 0)
     @State private var flight: (from: Camera, to: Camera, start: Date, duration: Double)?
     @State private var lastDrag: CGSize = .zero
     @State private var baseZoom = 1.0
-    @State private var overview = false
+    @State private var roomMode = false
     @State private var comparing = false
-    @State private var toast: String?
+    @State private var expanded = false
+    @State private var message: String?
 
     private static let compareIDs = ["imax-190", "ultraavx", "regular-large", "vip"]
+    private var compact: Bool { sizeClass == .compact }
+    private var centerY: Double { compact && !roomMode ? 0.36 : 0.5 }
 
     var body: some View {
         ZStack {
-            Color(red: 7 / 255, green: 8 / 255, blue: 12 / 255).ignoresSafeArea()
-            if comparing { compareGrid } else { scene3D; hud }
-            if let toast {
-                Text(toast).padding(10).background(.black.opacity(0.75), in: .rect(cornerRadius: 10)).transition(.opacity)
+            Color(red: 0.024, green: 0.027, blue: 0.04).ignoresSafeArea()
+            if comparing { compareGrid } else { scene3D; sheet }
+            if let message {
+                Text(message).font(.subheadline).padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(.black.opacity(0.7), in: .capsule).transition(.opacity)
             }
         }
-        .overlay(alignment: .topTrailing) { tools }
+        .overlay(alignment: .top) { topBar }
         .onChange(of: seat.id, initial: true) { old, _ in
             let first = old == seat.id
-            polys = Engine.scene(room, film: show.film, crowd: crowd, selfID: seat.id)
-            overview = false
-            onSelect(seat)
+            polys = Engine.scene(room, film: show.film, selfID: seat.id)
+            roomMode = false
+            expanded = !compact
             fly(from: first ? Camera.over(room) : current(Date()), to: Camera.eye(room, seat), duration: first ? 1.3 : 0.7)
+            if first { flash("Drag to look around. Pinch out to see the whole room.", 3) }
         }
     }
 
@@ -46,7 +51,8 @@ struct SeatView3D: View {
                 Canvas { g, size in
                     let c = current(tl.date)
                     let near = simd_distance(c.pos, V3(seat.x, seat.eye, seat.z)) < 1
-                    Engine.render(&g, size: size, polys: polys, cam: c, highlight: seat.id, hide: near ? seat.id : nil, map: overview)
+                    Engine.render(&g, size: size, polys: polys, cam: c, highlight: seat.id, hide: near ? seat.id : nil,
+                                  map: roomMode, pin: roomMode ? V3(seat.x, seat.eye + 0.9, seat.z) : nil, centerY: centerY)
                 }
             }
             .contentShape(.rect)
@@ -65,7 +71,7 @@ struct SeatView3D: View {
                     .simultaneously(with: MagnifyGesture()
                         .onChanged { v in
                             let z = baseZoom * v.magnification
-                            if !overview && z < 0.7 { setOverview(true) } else if flight == nil { cam.zoom = min(4, max(0.6, z)) }
+                            if !roomMode && z < 0.7 { setRoom(true) } else if flight == nil { cam.zoom = min(4, max(0.6, z)) }
                         }
                         .onEnded { _ in baseZoom = cam.zoom })
             )
@@ -79,19 +85,21 @@ struct SeatView3D: View {
     }
 
     private func tap(_ pt: CGPoint, size: CGSize) {
-        guard let id = Engine.pick(pt, size: size, polys: polys, cam: current(Date())),
+        guard let id = Engine.pick(pt, size: size, polys: polys, cam: current(Date()), centerY: centerY),
               let s = room.seats.first(where: { $0.id == id }), s.id != seat.id else { return }
-        if s.sold { flash("Seat \(s.id) is taken") } else { seat = s }
+        if s.sold { flash("\(room.name(s)) is taken") } else { seat = s }
     }
 
-    private func flash(_ text: String) {
-        withAnimation { toast = text }
-        Task { try? await Task.sleep(for: .seconds(1.4)); withAnimation { toast = nil } }
+    private func flash(_ text: String, _ seconds: Double = 1.4) {
+        withAnimation { message = text }
+        Task { try? await Task.sleep(for: .seconds(seconds)); withAnimation { if message == text { message = nil } } }
     }
 
-    private func setOverview(_ on: Bool) {
-        overview = on
+    private func setRoom(_ on: Bool) {
+        guard on != roomMode else { return }
+        roomMode = on
         fly(from: current(Date()), to: on ? Camera.over(room) : Camera.eye(room, seat), duration: 0.9)
+        if on { flash("Tap any teal seat to move there", 2.5) }
     }
 
     private func fly(from: Camera, to: Camera, duration: Double) {
@@ -106,118 +114,97 @@ struct SeatView3D: View {
         return f.from.lerp(f.to, e)
     }
 
-    // MARK: HUD
+    // MARK: Chrome
 
-    private var pictureNote: String {
-        let aspect = room.a.screen.aspect, film = show.film
-        if film == 0 { return "Filmed for IMAX, fills this \(aspect.formatted()):1 screen. \(Int(((2.39 / aspect - 1) * 100).rounded()))% more picture than a 2.39 room" }
-        if abs(film - aspect) < 0.06 { return "\(film.formatted()):1 movie fills the screen" }
-        return film > aspect ? "\(film.formatted()):1 movie, bars above and below" : "\(film.formatted()):1 movie, bars on the sides"
-    }
-
-    private var hud: some View {
-        VStack {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text("Seat \(seat.id)").font(.headline)
-                    Spacer()
-                    Text("\(seat.m.score)").font(.title2.bold()).foregroundStyle(Color(hue: Double(seat.m.score) / 300, saturation: 0.7, brightness: 0.85))
-                }
-                Text("\(show.movie.title) · \(room.a.name) \(room.a.variant) · row \(seat.row + 1) of \(room.rows.count)").font(.caption).foregroundStyle(.secondary)
-                if overview {
-                    Text("Yellow is your seat, dark seats are taken. Tap an open seat to switch.").font(.caption)
-                } else {
-                    Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 2) {
-                        line("Screen fills", "\(Int(seat.m.h.rounded()))° of your view (ideal \(Int(room.a.idealAngle))°)")
-                        line("Feels like", "a \(seat.m.tv)\" TV from your couch")
-                        line("Picture", pictureNote)
-                        line("Look up", "\(Int(seat.m.neck.rounded()))° to the top edge")
-                        line("Distance", String(format: "%.1f m from the screen", seat.z))
-                        line("Head in front", headText)
-                    }
-                    .font(.caption)
-                    ForEach(seat.m.notes, id: \.self) { Text("• " + $0).font(.caption) }
-                }
-            }
-            .padding(12)
-            .frame(maxWidth: 380, alignment: .leading)
-            .background(.ultraThinMaterial, in: .rect(cornerRadius: 14))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.top, 56)
+    private var topBar: some View {
+        HStack(spacing: 8) {
+            circle("xmark", "Close") { dismiss() }
             Spacer()
-            HStack(alignment: .bottom) {
-                Text(overview ? "Tap a seat to switch" : "Drag to look · pinch out for the room view · tap a seat to switch")
-                    .font(.caption2).foregroundStyle(.white.opacity(0.5))
-                Spacer()
-                nav
+            if !comparing {
+                Picker("View", selection: Binding(get: { roomMode }, set: { setRoom($0) })) {
+                    Text("My view").tag(false)
+                    Text("Room").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 180)
             }
+            Spacer()
+            circle(comparing ? "rectangle" : "square.grid.2x2", "Compare screen types") { comparing.toggle() }
+            ShareLink(item: shareURL, message: Text("\(room.name(seat)) for \(show.movie.title) in \(show.format): \(seat.m.verdict.lowercased()), like a \(seat.m.tv)\" TV.")) {
+                Image(systemName: "square.and.arrow.up").font(.system(size: 15, weight: .semibold)).frame(width: 38, height: 38).background(.ultraThinMaterial, in: .circle)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14).padding(.top, 6)
+    }
+
+    private func circle(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 15, weight: .semibold)).frame(width: 38, height: 38).background(.ultraThinMaterial, in: .circle)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    private static let icons = ["screen": "tv", "neck": "arrow.up", "heads": "person.fill", "center": "scope"]
+
+    private var sheet: some View {
+        VStack {
+            Spacer()
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(room.name(seat)).font(.title3.bold())
+                        Text("\(show.format) · \(show.movie.title) · \(show.time)").font(.footnote).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text(seat.m.verdict).font(.footnote.bold()).foregroundStyle(Theme.tone(seat.m.tone))
+                        .padding(.horizontal, 10).padding(.vertical, 5).background(.white.opacity(0.08), in: .capsule)
+                }
+                if !roomMode {
+                    if expanded {
+                        ForEach(seat.m.facts, id: \.self) { f in
+                            HStack(alignment: .top, spacing: 12) {
+                                Image(systemName: Self.icons[f.k] ?? "circle").font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(f.ok ? Theme.open : Theme.tone("okay"))
+                                    .frame(width: 30, height: 30).background(.white.opacity(0.06), in: .rect(cornerRadius: 9))
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(f.t).font(.subheadline)
+                                    if !f.sub.isEmpty { Text(f.sub).font(.caption).foregroundStyle(.secondary) }
+                                }
+                            }
+                        }
+                        Text("An estimate from a typical room and average height. Real rooms and people vary.")
+                            .font(.caption2).foregroundStyle(.tertiary)
+                    } else {
+                        let warn = seat.m.facts.filter { !$0.ok }.count
+                        Button { withAnimation(.snappy) { expanded = true } } label: {
+                            Text((warn > 0 ? "\(warn) thing\(warn > 1 ? "s" : "") to know · " : "") + "See details ›").font(.footnote).foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Button {
+                    onChoose(seat)
+                    dismiss()
+                } label: {
+                    Text("Choose this seat").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 14)
+                        .foregroundStyle(.white).background(Theme.pick, in: .rect(cornerRadius: 14))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(18)
+            .frame(maxWidth: 420)
+            .background(.ultraThinMaterial, in: .rect(cornerRadius: 26))
+            .frame(maxWidth: .infinity, alignment: compact ? .center : .leading)
             .padding(12)
         }
     }
-
-    private var headText: String {
-        guard let c = seat.m.c else { return "Front row, nobody ahead" }
-        return c >= 0.09 ? "Clear view over heads" : c >= 0.06 ? "Just clears heads" : "May block the bottom"
-    }
-
-    private func line(_ k: String, _ v: String) -> some View {
-        GridRow { Text(k).foregroundStyle(.secondary); Text(v) }
-    }
-
-    private var nav: some View {
-        Grid(horizontalSpacing: 6, verticalSpacing: 6) {
-            GridRow { Color.clear.frame(width: 1, height: 1); arrow("chevron.up", "Row forward", 0, -1); Color.clear.frame(width: 1, height: 1) }
-            GridRow { arrow("chevron.left", "Seat left", -1, 0); arrow("chevron.down", "Row back", 0, 1); arrow("chevron.right", "Seat right", 1, 0) }
-        }
-    }
-
-    private func arrow(_ icon: String, _ label: String, _ dx: Int, _ dr: Int) -> some View {
-        Button { move(dx, dr) } label: { Image(systemName: icon).frame(width: 40, height: 36) }
-            .background(.ultraThinMaterial, in: .rect(cornerRadius: 10))
-            .accessibilityLabel(label)
-    }
-
-    /// Next open seat in that direction, skipping taken ones.
-    private func move(_ dx: Int, _ dr: Int) {
-        if dr != 0 {
-            var r = seat.row + dr
-            while r >= 0 && r < room.rows.count {
-                if let s = room.rows[r].seats.filter({ !$0.sold }).min(by: { abs($0.x - seat.x) < abs($1.x - seat.x) }) { seat = s; return }
-                r += dr
-            }
-            return
-        }
-        let row = room.rows[seat.row].seats
-        guard var i = row.firstIndex(where: { $0.id == seat.id }) else { return }
-        i += dx
-        while i >= 0 && i < row.count {
-            if !row[i].sold { seat = row[i]; return }
-            i += dx
-        }
-    }
-
-    // MARK: Tools + compare
 
     private var shareURL: URL {
         var c = URLComponents(string: "https://alireza12t.github.io/seatsight/")!
         c.fragment = "t=\(show.theatre.id)&d=\(show.day)&m=\(show.movie.id)&fmt=\(show.format)&at=\(show.time)&seat=\(seat.id)"
         return c.url!
-    }
-
-    private var tools: some View {
-        HStack(spacing: 8) {
-            if !comparing {
-                Button(overview ? "My seat" : "Room view") { setOverview(!overview) }
-            }
-            Button(comparing ? "Back" : "Compare") { comparing.toggle() }
-            ShareLink(item: shareURL, message: Text("Seat \(seat.id) for \(show.movie.title) in \(room.a.name): the screen fills \(Int(seat.m.h.rounded()))° of my view, like a \(seat.m.tv)\" TV. Score \(seat.m.score)/100.")) {
-                Image(systemName: "square.and.arrow.up")
-            }
-            Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Back to seat map")
-        }
-        .buttonStyle(.bordered)
-        .padding(12)
     }
 
     private var compareGrid: some View {
@@ -229,12 +216,17 @@ struct SeatView3D: View {
             LazyVGrid(columns: cols, spacing: 2) {
                 ForEach(rooms, id: \.a.id) { r in
                     let s = r.similar(to: seat, from: room)
-                    let p = Engine.scene(r, film: show.movie.film(for: r.a.format), crowd: crowd, selfID: s.id)
+                    let p = Engine.scene(r, film: show.movie.film(for: r.a.format), selfID: s.id)
                     Canvas { g, size in Engine.render(&g, size: size, polys: p, cam: .eye(r, s), hide: s.id) }
                         .frame(height: h)
-                        .overlay(alignment: .topLeading) {
-                            Text("\(r.a.name) · seat \(s.id) · \(Int(s.m.h.rounded()))° · \(s.m.tv)\" TV · \(s.m.score)")
-                                .font(.caption).padding(6).background(.black.opacity(0.6), in: .rect(cornerRadius: 8)).padding(6)
+                        .overlay(alignment: .bottomLeading) {
+                            HStack(spacing: 6) {
+                                Text(r.a.format).bold()
+                                Text(s.m.verdict).foregroundStyle(Theme.tone(s.m.tone))
+                                Text("· like a \(s.m.tv)\" TV").foregroundStyle(.secondary)
+                            }
+                            .font(.caption).padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(.black.opacity(0.65), in: .rect(cornerRadius: 10)).padding(10)
                         }
                 }
             }

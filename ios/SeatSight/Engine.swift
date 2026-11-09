@@ -58,7 +58,15 @@ struct Metrics: Hashable, Sendable {
     var h = 0.0, neck = 0.0, off = 0.0
     var c: Double?
     var score = 0, tv = 0
-    var notes: [String] = []
+    var facts: [Fact] = []
+    var verdict = "", tone = ""
+}
+
+/// One plain-language line for buyers. All of these are estimates: room sizes are typical, people vary.
+struct Fact: Hashable, Sendable {
+    let k: String, t: String
+    var sub = ""
+    let ok: Bool
 }
 
 struct Seat: Identifiable, Hashable, Sendable {
@@ -151,12 +159,18 @@ struct Room: Sendable {
         var m = Metrics(h: h, neck: neck, off: off, c: c)
         m.score = Int((100 * aS * nS * oS * cS).rounded())
         m.tv = Int((2 * 2.5 * tan(h / 2 * .pi / 180) * 1.147 / 0.0254).rounded())
-        if h > ideal * 1.25 { m.notes.append("Very close. The screen spills past your view, you will move your head to follow action.") }
-        else if h < ideal * 0.7 { m.notes.append("Far back. Feels more like a big TV than a wall of picture.") }
-        else { m.notes.append("The screen fills your view about right for this format.") }
-        if neck > 30 { m.notes.append("You look up \(Int(neck.rounded()))° to the top edge. Neck strain is likely in a long movie.") }
-        if off > 20 { m.notes.append("Well off to the side. The picture looks skewed.") }
-        if let c, c < 0.06 { m.notes.append("The head in front may cover the bottom of the screen (subtitles).") }
+        let k = h / ideal
+        m.facts.append(Fact(k: "screen", t: k > 1.25 ? "Very close, the screen is huge" : k > 1.1 ? "Big and immersive" : k >= 0.85 ? "Screen fills your view just right" : k >= 0.7 ? "A bit far, still a big picture" : "Far back, the screen feels smaller", sub: "Like a \(m.tv)\" TV at home", ok: k >= 0.75 && k <= 1.25))
+        m.facts.append(Fact(k: "neck", t: neck > 35 ? "You will look up a lot" : neck > 30 ? "You look up a little" : "Comfortable, no neck strain", ok: neck <= 30))
+        if let c {
+            m.facts.append(Fact(k: "heads", t: c < 0.06 ? "Heads in front may cover subtitles" : c < 0.16 ? "Clear view for most people" : "Clear view, even behind a tall person",
+                                sub: c >= 0.06 && c < 0.16 ? "A tall person in front could cover the bottom edge" : "", ok: c >= 0.06))
+        } else {
+            m.facts.append(Fact(k: "heads", t: "Front row, nobody in front of you", ok: true))
+        }
+        m.facts.append(Fact(k: "center", t: off > 20 ? "Off to the side, the picture looks angled" : off > 10 ? "Slightly off center" : "Centered on the screen", ok: off <= 20))
+        m.verdict = m.score >= 85 ? "Great seat" : m.score >= 70 ? "Good seat" : m.score >= 50 ? "Okay seat" : "Not ideal"
+        m.tone = m.score >= 85 ? "great" : m.score >= 70 ? "good" : m.score >= 50 ? "okay" : "poor"
         return m
     }
 
@@ -182,6 +196,7 @@ struct Poly: Sendable {
     var emit = false
     var seat: String?
     var sold: Bool?
+    var shell = false
     var center: V3?   // set for circles (heads)
     var radius = 0.0
 }
@@ -194,8 +209,14 @@ struct Camera: Sendable {
         return Camera(pos: pos, yaw: atan2(d.x, -d.z), pitch: atan2(d.y, (d.x * d.x + d.z * d.z).squareRoot()))
     }
     static func eye(_ r: Room, _ s: Seat) -> Camera { look(V3(s.x, s.eye, s.z), V3(0, r.bottom + r.H / 2, 0)) }
-    // Dollhouse view from behind and above; the back wall and ceiling are culled so you see every seat.
-    static func over(_ r: Room) -> Camera { look(V3(0, r.ceil + 3, r.back + 2.5), V3(0, r.rows[0].floor, r.back * 0.45)) }
+    // Dollhouse view from behind and above, close enough that the seats fill the frame.
+    // Ceiling and back wall are skipped in this view (render map: true).
+    static func over(_ r: Room) -> Camera {
+        let z0 = r.rows[0].z, last = r.rows[r.rows.count - 1]
+        let t = V3(0, last.floor * 0.5, (z0 + r.back) / 2 - 1)
+        let D = max(r.roomW * 0.62, (r.back - z0) * 0.85) + 2, el = 58 * Double.pi / 180
+        return look(V3(0, t.y + D * sin(el), t.z + D * cos(el)), t)
+    }
     func lerp(_ b: Camera, _ t: Double) -> Camera {
         Camera(pos: pos + (b.pos - pos) * t, yaw: yaw + (b.yaw - yaw) * t, pitch: pitch + (b.pitch - pitch) * t, zoom: zoom + (b.zoom - zoom) * t)
     }
@@ -204,7 +225,7 @@ struct Camera: Sendable {
 enum Engine {
     static let near = 0.05
 
-    static func scene(_ r: Room, film: Double = 0, crowd: Bool = false, selfID: String? = nil) -> [Poly] {
+    static func scene(_ r: Room, film: Double = 0, crowd: Bool = true, selfID: String? = nil) -> [Poly] {
         var out: [Poly] = []
         out.reserveCapacity(r.seats.count * 11 + 80)
         let a = r.a, hw = r.roomW / 2
@@ -222,8 +243,8 @@ enum Engine {
         quad([V3(-hw, 0, 0), V3(hw, 0, 0), V3(hw, r.ceil, 0), V3(-hw, r.ceil, 0)], V3(14, 15, 20), 0, V3(0, 0, 1))
         quad([V3(-hw, 0, r.back), V3(-hw, 0, 0), V3(-hw, r.ceil, 0), V3(-hw, r.ceil, r.back)], wall, 0, V3(1, 0, 0))
         quad([V3(hw, 0, 0), V3(hw, 0, r.back), V3(hw, r.ceil, r.back), V3(hw, r.ceil, 0)], wall, 0, V3(-1, 0, 0))
-        quad([V3(hw, 0, r.back), V3(-hw, 0, r.back), V3(-hw, r.ceil, r.back), V3(hw, r.ceil, r.back)], wall, 0, V3(0, 0, -1))
-        quad([V3(-hw, r.ceil, 0), V3(hw, r.ceil, 0), V3(hw, r.ceil, r.back), V3(-hw, r.ceil, r.back)], V3(12, 12, 16), 0, V3(0, -1, 0))
+        quad([V3(hw, 0, r.back), V3(-hw, 0, r.back), V3(-hw, r.ceil, r.back), V3(hw, r.ceil, r.back)], wall, 0, V3(0, 0, -1)); out[out.count - 1].shell = true
+        quad([V3(-hw, r.ceil, 0), V3(hw, r.ceil, 0), V3(hw, r.ceil, r.back), V3(-hw, r.ceil, r.back)], V3(12, 12, 16), 0, V3(0, -1, 0)); out[out.count - 1].shell = true
         var prevFloor = 0.0, prevZ = 0.0
         for row in r.rows {
             let z0 = row.z - a.rowPitch * 0.55
@@ -277,7 +298,7 @@ enum Engine {
             quad([V3(-cw / 2 + u0 * cw, y, zS + 0.008), V3(-cw / 2 + u1 * cw, y, zS + 0.008), V3(-cw / 2 + u1 * cw, y + ch * 0.028, zS + 0.008), V3(-cw / 2 + u0 * cw, y + ch * 0.028, zS + 0.008)], V3(250, 250, 250), 10, nil, emit: true)
         }
         // seats and people
-        let seatC = hex(a.seatColor ?? "#35416b"), soldC = V3(46, 46, 52), recl = a.seatWidth >= 0.8
+        let seatC = V3(38, 190, 170), soldC = V3(44, 46, 54), recl = a.seatWidth >= 0.8
         let person = V3(52, 48, 56)
         for s in r.seats {
             let w = a.seatWidth * 0.44, fl = s.floor, z = s.z
@@ -296,21 +317,21 @@ enum Engine {
     private static let light: V3 = { let v = V3(0.25, 0.6, -0.75); return v / (v * v).sum().squareRoot() }()
 
     struct View {
-        let f: Double, pos: V3, rt: V3, up: V3, fw: V3, w: Double, h: Double
-        init(_ cam: Camera, _ size: CGSize) {
-            w = size.width; h = size.height; pos = cam.pos
+        let f: Double, pos: V3, rt: V3, up: V3, fw: V3, w: Double, h: Double, cy: Double
+        init(_ cam: Camera, _ size: CGSize, _ centerY: Double = 0.5) {
+            w = size.width; h = size.height; pos = cam.pos; cy = centerY
             let cy = cos(cam.yaw), sy = sin(cam.yaw), cp = cos(cam.pitch), sp = sin(cam.pitch)
             fw = V3(sy * cp, sp, -cy * cp); rt = V3(cy, 0, sy)
             up = V3(rt.y * fw.z - rt.z * fw.y, rt.z * fw.x - rt.x * fw.z, rt.x * fw.y - rt.y * fw.x)
             f = min(w / 2 / tan(.pi / 4), h / 2 / tan(37 * .pi / 180)) * cam.zoom
         }
         func toCam(_ v: V3) -> V3 { let d = v - pos; return V3((d * rt).sum(), (d * up).sum(), (d * fw).sum()) }
-        func proj(_ q: V3) -> CGPoint { CGPoint(x: w / 2 + f * q.x / q.z, y: h / 2 - f * q.y / q.z) }
+        func proj(_ q: V3) -> CGPoint { CGPoint(x: w / 2 + f * q.x / q.z, y: h * cy - f * q.y / q.z) }
     }
 
     /// Which seat is under a tap? Forgiving: falls back to the nearest seat face within 24 pt.
-    static func pick(_ point: CGPoint, size: CGSize, polys: [Poly], cam: Camera) -> String? {
-        let v = View(cam, size)
+    static func pick(_ point: CGPoint, size: CGSize, polys: [Poly], cam: Camera, centerY: Double = 0.5) -> String? {
+        let v = View(cam, size, centerY)
         var hit: String?, best = Double.infinity, near: String?, nearD = 24.0
         for poly in polys {
             guard let seat = poly.seat, poly.center == nil, poly.sold != nil else { continue }
@@ -334,8 +355,8 @@ enum Engine {
     }
     private static let near0 = near
 
-    static func render(_ g: inout GraphicsContext, size: CGSize, polys: [Poly], cam: Camera, highlight: String? = nil, hide: String? = nil, map: Bool = false) {
-        let v = View(cam, size), f = v.f, pos = cam.pos
+    static func render(_ g: inout GraphicsContext, size: CGSize, polys: [Poly], cam: Camera, highlight: String? = nil, hide: String? = nil, map: Bool = false, pin: V3? = nil, centerY: Double = 0.5) {
+        let v = View(cam, size, centerY), f = v.f, pos = cam.pos
         func toCam(_ p: V3) -> V3 { v.toCam(p) }
         func proj(_ q: V3) -> CGPoint { v.proj(q) }
 
@@ -344,6 +365,7 @@ enum Engine {
         items.reserveCapacity(polys.count / 2)
         for (i, poly) in polys.enumerated() {
             if let hide, poly.seat == hide { continue }
+            if map && poly.shell { continue }
             if let c = poly.center {
                 let q = toCam(c)
                 guard q.z > near else { continue }
@@ -369,15 +391,25 @@ enum Engine {
         for it in items {
             let p = polys[it.i]
             var col = p.col
-            if map, let sold = p.sold { col = sold ? V3(58, 58, 66) : V3(70, 120, 205) } // room view: map colors
-            if let s = p.seat, s == highlight, p.center == nil { col = V3(255, 196, 60) }
+            if let s = p.seat, s == highlight, p.center == nil { col = V3(255, 92, 122) }
             var k = 1.0
             if !p.emit {
                 let lit = p.n.map { max(0, ($0 * light).sum()) } ?? 0.5
-                k = (0.45 + 0.75 * lit) / (map ? 1 : 1 + it.d * 0.03)
+                k = (0.45 + 0.75 * lit) / (map ? 1 : 1 + it.d * (p.seat != nil ? 0.012 : 0.03))
             }
             let c = col * k / 255
             g.fill(it.path, with: .color(Color(red: min(1, c.x), green: min(1, c.y), blue: min(1, c.z))))
+        }
+        if let pin { // marker above your seat in the room view
+            let q = toCam(pin)
+            if q.z > near {
+                let p = proj(q), rr = max(7, f * 0.32 / q.z), coral = Color(red: 1, green: 0.36, blue: 0.48)
+                var tail = Path()
+                tail.move(to: CGPoint(x: p.x, y: p.y + rr * 2.2)); tail.addLine(to: CGPoint(x: p.x - rr * 0.7, y: p.y + rr * 0.6)); tail.addLine(to: CGPoint(x: p.x + rr * 0.7, y: p.y + rr * 0.6))
+                g.fill(tail, with: .color(coral))
+                g.fill(Path(ellipseIn: CGRect(x: p.x - rr, y: p.y - rr, width: rr * 2, height: rr * 2)), with: .color(coral))
+                g.fill(Path(ellipseIn: CGRect(x: p.x - rr * 0.4, y: p.y - rr * 0.4, width: rr * 0.8, height: rr * 0.8)), with: .color(.white))
+            }
         }
     }
 
