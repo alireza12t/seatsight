@@ -33,6 +33,7 @@ struct SeatView3D: View {
             }
         }
         .overlay(alignment: .top) { topBar }
+        .task { if Demo.on { await demo() } }
         .onChange(of: seat.id, initial: true) { old, _ in
             let first = old == seat.id
             polys = Engine.scene(room, film: show.film, selfID: seat.id)
@@ -112,6 +113,23 @@ struct SeatView3D: View {
         let t = min(1, date.timeIntervalSince(f.start) / f.duration)
         let e = t < 0.5 ? 4 * t * t * t : 1 - pow(-2 * t + 2, 3) / 2
         return f.from.lerp(f.to, e)
+    }
+
+    /// Scripted walkthrough for screen recordings (Demo.on only).
+    private func demo() async {
+        await Demo.wait(3.2)
+        let base = cam
+        var look = base; look.yaw -= 0.45
+        fly(from: base, to: look, duration: 1.4); await Demo.wait(1.8)
+        fly(from: look, to: base, duration: 1.4); await Demo.wait(1.8)
+        withAnimation(.snappy) { expanded = true }; await Demo.wait(3)
+        setRoom(true); await Demo.wait(2.6)
+        if let s = room.seats.first(where: { !$0.sold && $0.row == seat.row + 2 && $0.m.score > 70 && $0.id != seat.id }) { seat = s }
+        await Demo.wait(3.4)
+        withAnimation(.snappy) { expanded = true }; await Demo.wait(2.5)
+        comparing = true; await Demo.wait(4)
+        comparing = false; await Demo.wait(1.5)
+        onChoose(seat); dismiss()
     }
 
     // MARK: Chrome

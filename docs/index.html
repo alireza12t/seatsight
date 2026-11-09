@@ -4,8 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0a0b0f">
-<title>SeatSight</title>
-<meta name="description" content="Pick a movie and a seat, then see the screen from that seat in 3D before you book.">
+<title>SeatSight: see your movie theater seat in 3D before you book</title>
+<meta name="description" content="Free, open source 3D seat preview for cinema seat maps. Tap a seat and see the screen from it, for IMAX, UltraAVX, Regular and VIP auditoriums.">
+<meta name="keywords" content="cinema seat view, movie theater seat preview, 3D seat map, IMAX seat view, UltraAVX, VIP cinema, Cineplex, best seat in the theater, seat selection">
+<link rel="canonical" href="https://alireza12t.github.io/seatsight/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="SeatSight: see your movie seat in 3D before you book">
+<meta property="og:description" content="Tap a seat, fly into it, see the screen. IMAX, UltraAVX, Regular and VIP. Open source.">
+<meta property="og:url" content="https://alireza12t.github.io/seatsight/">
+<meta property="og:image" content="https://alireza12t.github.io/seatsight/og.jpg">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://alireza12t.github.io/seatsight/og.jpg">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"SeatSight","applicationCategory":"EntertainmentApplication","operatingSystem":"Web, iOS","description":"Open source 3D seat preview for movie theater seat maps.","url":"https://alireza12t.github.io/seatsight/","license":"https://opensource.org/licenses/MIT","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"codeRepository":"https://github.com/alireza12t/seatsight"}</script>
+
 <style>
   :root {
     --bg: #0a0b0f; --surface: #14161c; --surface-2: #1c1f27; --line: #ffffff12; --text: #f3f4f8; --dim: #8d93a3;
@@ -157,6 +169,7 @@
       <button class="pill" id="pickBest">Pick the best seat for me</button>
     </div>
     <div class="map" id="map"></div>
+    <div class="legend"><span><i style="background:var(--open)"></i>Open</span><span><i style="background:var(--taken)"></i>Taken</span><span><i style="background:var(--pick)"></i>Your seat</span></div>
   </section>
 
   <p class="note">Demo with made-up movies, theatres and sold seats. Room sizes are typical, not measured. Not affiliated with any cinema chain. <a href="https://github.com/alireza12t/seatsight">Open source</a></p>
@@ -183,7 +196,7 @@
   <div class="sheet" id="sheet"></div>
   <div class="toast" id="toast"></div>
 </div>
-<script src="engine.js?v=1.2.5"></script>
-<script src="app.js?v=1.2.5"></script>
+<script src="engine.js?v=1.2.6"></script>
+<script src="app.js?v=1.2.6"></script>
 </body>
 </html>

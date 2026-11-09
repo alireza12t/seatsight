@@ -7,6 +7,18 @@ struct SeatSightApp: App {
     }
 }
 
+/// Debug-only demo mode for screen recordings: launch with -demo and the app taps through the flow itself.
+enum Demo {
+    static var on: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("-demo")
+        #else
+        false
+        #endif
+    }
+    static func wait(_ s: Double) async { try? await Task.sleep(for: .seconds(s)) }
+}
+
 enum Theme {
     static let bg = Color(red: 0.04, green: 0.043, blue: 0.06)
     static let surface = Color.white.opacity(0.06)
@@ -74,10 +86,11 @@ extension Room {
 
 struct MoviesView: View {
     @AppStorage("theatre") private var theatreID = "harbourfront"
+    @State private var path = NavigationPath()
     private var theatre: Theatre { Catalog.shared.theatres.first { $0.id == theatreID } ?? Catalog.shared.theatres[0] }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 16)], spacing: 22) {
                     ForEach(Catalog.shared.movies) { m in
@@ -109,6 +122,11 @@ struct MoviesView: View {
             }
             .navigationDestination(for: Movie.self) { ShowtimesView(movie: $0, theatre: theatre) }
             .navigationDestination(for: Show.self) { SeatMapView(show: $0) }
+        }
+        .task {
+            guard Demo.on, let m = Catalog.shared.movies.first else { return }
+            await Demo.wait(2); path.append(m)
+            await Demo.wait(2); path.append(Show(movie: m, theatre: theatre, format: "IMAX", time: Show.times(m, theatre, 0, "IMAX")[0], day: 0))
         }
     }
 }
@@ -216,6 +234,10 @@ struct SeatMapView: View {
             }
         }
         .safeAreaInset(edge: .bottom) { dock }
+        .task {
+            guard Demo.on else { return }
+            await Demo.wait(2.5); open(room.best)
+        }
         .fullScreenCover(item: $viewing) { seat in
             SeatView3D(room: room, seat: seat, show: show) { chosen = $0 }
         }

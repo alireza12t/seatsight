@@ -102,7 +102,7 @@
         html += `<button class="${cls}" data-id="${s.id}"${s.sold ? ' disabled' : ''} aria-label="${seatName(s)}, ${s.sold ? 'taken' : s.m.verdict}" title="${seatName(s)} · ${s.sold ? 'Taken' : s.m.verdict}"></button>`;
       });
       return html + `<b>${r.label}</b></div>`;
-    }).join('') + `</div><div class="legend"><span><i style="background:var(--open)"></i>Open</span><span><i style="background:var(--taken)"></i>Taken</span><span><i style="background:var(--pick)"></i>Your seat</span></div>`;
+    }).join('') + '</div>';
     map.scrollLeft = (map.scrollWidth - map.clientWidth) / 2;
     dock();
   }

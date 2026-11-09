@@ -39,7 +39,7 @@ Pick a seat, see the screen from it. Web + iOS, no server, no 3D engine.
 - [ ] Curved IMAX screens
 - [ ] Staggered seats (offset rows) in the C-value check
 - [ ] Short demo video for the Cineplex pitch post
-- [ ] Create the public GitHub repo and turn on Pages (Settings > Pages > main /docs)
+- [x] Public repo alireza12t/seatsight with GitHub Pages from main /docs (2026-11-08)
 
 ## Layout
 - `docs/` web app (index.html, engine.js, app.js, auditoriums.json)

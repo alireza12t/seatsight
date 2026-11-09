@@ -3,3 +3,6 @@ xcuserdata/
 DerivedData/
 build/
 *.xcuserstate
+
+# video production (large footage, rendered films, private fonts)
+videos/
