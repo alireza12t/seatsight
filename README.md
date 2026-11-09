@@ -2,9 +2,9 @@
 
 # SeatSight
 
-### See your movie theater seat in 3D before you book it
+### Why doesn't any movie app show you the view from your seat?
 
-A free, open source **3D seat preview** for cinema seat maps. Tap a seat and fly into it to see the screen the way you will see it, for **IMAX, UltraAVX, Regular and VIP** auditoriums. Web and iPhone. No server, no 3D engine, about 48 KB.
+SeatSight is a free, open source **3D seat preview** that shows it's easy. Tap a seat on a cinema seat map and fly into it to see the screen the way you will see it, for **IMAX, UltraAVX, Regular and VIP** auditoriums. Web and iPhone. No server, no 3D engine, about 48 KB. Cinema chains already have the room data. This is the missing piece.
 
 [**Try the live demo**](https://alireza12t.github.io/seatsight/) · [How it works](#how-it-works) · [For cinema chains](#for-cineplex-and-other-cinema-chains) · [Room data format](#room-data-format)
 
@@ -24,7 +24,13 @@ Every movie booking app shows the same thing: a flat grid of squares. You pick o
 
 But row F in an IMAX auditorium and row F in a VIP room are completely different seats. Screen size, distance, how far you look up, whether the person in front blocks the subtitles: the seat map tells you none of it.
 
-**SeatSight shows you the view from the seat before you buy the ticket.**
+So why don't booking apps just show you the view from the seat? It isn't a hard problem:
+
+- **It's tiny.** The whole web app is about 48 KB with zero dependencies. The renderer is one 18 KB file.
+- **It needs no new backend.** No server, no 3D engine, no SDK. It draws into a canvas next to the seat map that's already there.
+- **The data already exists.** Every auditorium was built from drawings with the screen size, row spacing and floor rise in them.
+
+**SeatSight is the proof. Cinema apps should have this.** If you agree, share it and tag Cineplex.
 
 ## Features
 
