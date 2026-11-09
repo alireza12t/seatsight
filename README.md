@@ -148,6 +148,10 @@ PLAN.md          roadmap and open items
 
 Ideas and pull requests are welcome. Open an issue with the auditorium you'd like to see.
 
+## How it was made
+
+Built by [Alireza Toghiani](https://github.com/alireza12t) with **Claude** (Anthropic's AI, Claude Opus 5.5 in Claude Code) as a coding partner. Claude helped with the research on screen formats and viewing standards, wrote much of the 3D renderer, the seat scoring, the web app and the SwiftUI app, and produced the videos with the Foldline kit. The idea, the product calls and the direction are Alireza's.
+
 ## License
 
 [MIT](LICENSE). Use it, ship it, put it in your booking app.
