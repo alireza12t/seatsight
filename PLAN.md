@@ -1,0 +1,32 @@
+# SeatSight plan (handover file, read first)
+
+Pick a seat, see the screen from it. Web + iOS, no server, no 3D engine.
+
+## v1.0.0 features
+- [x] Shared room format (`docs/auditoriums.json`): screen size and aspect, row spacing, rake, rows as `"4-12-4"` strings
+- [x] 6 typical presets: IMAX 1.90, IMAX GT 1.43, UltraAVX, Regular large, Regular small, VIP
+- [x] Seat map like the booking apps, with sold seats (demo data, seeded so it's stable)
+- [x] Tap a seat, fly from the back of the room into your seat in 3D
+- [x] Drag to look around, scroll/pinch to zoom
+- [x] Seat score 0 to 100: screen angle vs format's ideal, neck tilt, off-axis, head in front (C-value)
+- [x] "Best seats" heatmap on the map, best seat badge
+- [x] TV equivalent: "like a 140-inch TV from your couch"
+- [x] Film format toggle: a 2.39 movie on an IMAX 1.90 screen shows bars, 1.43 IMAX footage fills a GT screen
+- [x] Crowd toggle: heads in sold seats, see who blocks the subtitles
+- [x] Compare: same relative seat in IMAX, UltraAVX, Regular, VIP side by side
+- [x] Adjust room sliders (screen width, first row distance, rake) to match a theatre you know
+- [x] Share link with room + seat in the URL hash (web), share button on iOS
+- [x] Web: GitHub Pages from `docs/`, zero dependencies
+- [x] iOS: SwiftUI `Canvas`, iOS 17+, XcodeGen project
+
+## Open items / next
+- [ ] Real room data. Ask Cineplex (or theatre fans) for measured drawings per auditorium
+- [ ] iOS gyro look-around (CoreMotion)
+- [ ] Curved IMAX screens
+- [ ] Staggered seats (offset rows) in the C-value check
+- [ ] Short demo video for the Cineplex pitch post
+- [ ] Create the public GitHub repo and turn on Pages (Settings > Pages > main /docs)
+
+## Layout
+- `docs/` web app (index.html, engine.js, app.js, auditoriums.json)
+- `ios/` SwiftUI app, `project.yml` for XcodeGen; bundles `docs/auditoriums.json`
