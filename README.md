@@ -7,12 +7,14 @@ Every time I book a movie I stare at a grid of little squares and guess. Row F i
 **Try it:** https://alireza12t.github.io/seatsight/
 
 ## What it does
+- Booking-style flow: pick a theatre, a movie, a showtime by screen type, then a seat (movies and theatres are made up)
 - Seat map like the booking apps, for IMAX (1.90:1 and the rare 1.43:1 GT), UltraAVX, Regular (large and small) and VIP rooms
 - Tap a seat to fly from the back of the room into it. Drag to look around, pinch or scroll to zoom, arrows to try the seat next to you
 - A seat score from 0 to 100 based on how much of your view the screen fills, how far you look up, how far off-center you are, and whether the head in front clears the bottom of the screen
 - "Feels like a 140-inch TV from your couch" so the number means something
 - Best seats heatmap and a best seat button
-- Movie format: see the black bars when a scope movie plays on an IMAX screen
+- The movie is one fixed picture and each screen crops it, so a movie filmed for IMAX shows more sky and foreground on a 1.43:1 GT screen than on a 1.90 one, and a scope movie gets bars on an IMAX screen
+- Room view: pinch out (or tap Room view) to see the whole room from above, with your seat in yellow and taken seats dark. Tap any open seat to fly into it
 - Crowd mode: heads in the sold seats, so you can see who blocks the subtitles
 - Compare: the same seat in IMAX, UltraAVX, Regular and VIP side by side
 - Adjust the room (screen width, first row distance, rake) to match a theatre you know

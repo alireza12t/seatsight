@@ -1,48 +1,340 @@
 {
   "version": 1,
-  "note": "Typical values, not measured Cineplex rooms. Meters. rows go front (A) to back; \"4-14-4\" means 4 seats, aisle, 14 seats, aisle, 4 seats.",
+  "note": "Typical values, not measured Cineplex rooms. Meters. rows go front (A) to back; \"4-14-4\" means 4 seats, aisle, 14 seats, aisle, 4 seats. Theatres and movies are made up for the demo.",
   "auditoriums": [
     {
-      "id": "imax-190", "name": "IMAX", "variant": "Laser / digital, 1.90:1", "format": "IMAX",
-      "screen": { "width": 18, "aspect": 1.9, "bottom": 0.9 },
-      "firstRow": 5.5, "rowPitch": 1.05, "riser": 0.55, "flatRows": 0,
-      "seatWidth": 0.6, "aisle": 1.1, "eyeHeight": 1.15, "idealAngle": 60, "seatColor": "#262b38",
-      "rows": ["3-14-3", "4-16-4", "4-18-4", "4-18-4", "4-18-4", "4-18-4", "4-18-4", "4-18-4", "4-18-4", "4-18-4", "4-18-4", "4-18-4", "4-18-4", "4-16-4"]
+      "id": "imax-190",
+      "name": "IMAX",
+      "variant": "Laser / digital, 1.90:1",
+      "format": "IMAX",
+      "screen": {
+        "width": 18,
+        "aspect": 1.9,
+        "bottom": 0.9
+      },
+      "firstRow": 5.5,
+      "rowPitch": 1.05,
+      "riser": 0.55,
+      "flatRows": 0,
+      "seatWidth": 0.6,
+      "aisle": 1.1,
+      "eyeHeight": 1.15,
+      "idealAngle": 60,
+      "seatColor": "#262b38",
+      "rows": [
+        "3-14-3",
+        "4-16-4",
+        "4-18-4",
+        "4-18-4",
+        "4-18-4",
+        "4-18-4",
+        "4-18-4",
+        "4-18-4",
+        "4-18-4",
+        "4-18-4",
+        "4-18-4",
+        "4-18-4",
+        "4-18-4",
+        "4-16-4"
+      ]
     },
     {
-      "id": "imax-143", "name": "IMAX", "variant": "GT Laser, 1.43:1 (rare)", "format": "IMAX",
-      "screen": { "width": 22, "aspect": 1.43, "bottom": 0.8 },
-      "firstRow": 6.5, "rowPitch": 1.05, "riser": 0.6, "flatRows": 0,
-      "seatWidth": 0.6, "aisle": 1.1, "eyeHeight": 1.15, "idealAngle": 65, "seatColor": "#262b38",
-      "rows": ["4-16-4", "5-18-5", "5-20-5", "5-20-5", "5-20-5", "5-20-5", "5-20-5", "5-20-5", "5-20-5", "5-20-5", "5-20-5", "5-20-5", "5-20-5", "5-20-5", "5-20-5", "5-18-5"]
+      "id": "imax-143",
+      "name": "IMAX",
+      "variant": "GT Laser, 1.43:1 (rare)",
+      "format": "IMAX",
+      "screen": {
+        "width": 22,
+        "aspect": 1.43,
+        "bottom": 0.8
+      },
+      "firstRow": 6.5,
+      "rowPitch": 1.05,
+      "riser": 0.6,
+      "flatRows": 0,
+      "seatWidth": 0.6,
+      "aisle": 1.1,
+      "eyeHeight": 1.15,
+      "idealAngle": 65,
+      "seatColor": "#262b38",
+      "rows": [
+        "4-16-4",
+        "5-18-5",
+        "5-20-5",
+        "5-20-5",
+        "5-20-5",
+        "5-20-5",
+        "5-20-5",
+        "5-20-5",
+        "5-20-5",
+        "5-20-5",
+        "5-20-5",
+        "5-20-5",
+        "5-20-5",
+        "5-20-5",
+        "5-20-5",
+        "5-18-5"
+      ]
     },
     {
-      "id": "ultraavx", "name": "UltraAVX", "variant": "Wall-to-wall, 2.39:1", "format": "UltraAVX",
-      "screen": { "width": 16.5, "aspect": 2.39, "bottom": 1.2 },
-      "firstRow": 5, "rowPitch": 1.25, "riser": 0.45, "flatRows": 0,
-      "seatWidth": 0.7, "aisle": 1.1, "eyeHeight": 1.1, "idealAngle": 50, "seatColor": "#2a3a5c",
-      "rows": ["3-12-3", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-12-4"]
+      "id": "ultraavx",
+      "name": "UltraAVX",
+      "variant": "Wall-to-wall, 2.39:1",
+      "format": "UltraAVX",
+      "screen": {
+        "width": 16.5,
+        "aspect": 2.39,
+        "bottom": 1.2
+      },
+      "firstRow": 5,
+      "rowPitch": 1.25,
+      "riser": 0.45,
+      "flatRows": 0,
+      "seatWidth": 0.7,
+      "aisle": 1.1,
+      "eyeHeight": 1.1,
+      "idealAngle": 50,
+      "seatColor": "#2a3a5c",
+      "rows": [
+        "3-12-3",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-12-4"
+      ]
     },
     {
-      "id": "regular-large", "name": "Regular", "variant": "Large house, 2.39:1", "format": "Regular",
-      "screen": { "width": 13, "aspect": 2.39, "bottom": 1.2 },
-      "firstRow": 4.5, "rowPitch": 1.0, "riser": 0.4, "flatRows": 2,
-      "seatWidth": 0.56, "aisle": 1.1, "eyeHeight": 1.15, "idealAngle": 45, "seatColor": "#35416b",
-      "rows": ["3-12-3", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-14-4", "4-12-4"]
+      "id": "regular-large",
+      "name": "Regular",
+      "variant": "Large house, 2.39:1",
+      "format": "Regular",
+      "screen": {
+        "width": 13,
+        "aspect": 2.39,
+        "bottom": 1.2
+      },
+      "firstRow": 4.5,
+      "rowPitch": 1.0,
+      "riser": 0.4,
+      "flatRows": 2,
+      "seatWidth": 0.56,
+      "aisle": 1.1,
+      "eyeHeight": 1.15,
+      "idealAngle": 45,
+      "seatColor": "#35416b",
+      "rows": [
+        "3-12-3",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-14-4",
+        "4-12-4"
+      ]
     },
     {
-      "id": "regular-small", "name": "Regular", "variant": "Small house, 2.39:1", "format": "Regular",
-      "screen": { "width": 9.5, "aspect": 2.39, "bottom": 1.1 },
-      "firstRow": 3.5, "rowPitch": 1.0, "riser": 0.35, "flatRows": 1,
-      "seatWidth": 0.56, "aisle": 1.1, "eyeHeight": 1.15, "idealAngle": 45, "seatColor": "#35416b",
-      "rows": ["3-8-3", "3-10-3", "3-10-3", "3-10-3", "3-10-3", "3-10-3", "3-10-3", "3-10-3", "3-10-3", "3-8-3"]
+      "id": "regular-small",
+      "name": "Regular",
+      "variant": "Small house, 2.39:1",
+      "format": "Regular",
+      "screen": {
+        "width": 9.5,
+        "aspect": 2.39,
+        "bottom": 1.1
+      },
+      "firstRow": 3.5,
+      "rowPitch": 1.0,
+      "riser": 0.35,
+      "flatRows": 1,
+      "seatWidth": 0.56,
+      "aisle": 1.1,
+      "eyeHeight": 1.15,
+      "idealAngle": 45,
+      "seatColor": "#35416b",
+      "rows": [
+        "3-8-3",
+        "3-10-3",
+        "3-10-3",
+        "3-10-3",
+        "3-10-3",
+        "3-10-3",
+        "3-10-3",
+        "3-10-3",
+        "3-10-3",
+        "3-8-3"
+      ]
     },
     {
-      "id": "vip", "name": "VIP", "variant": "19+, recliners, 2.39:1", "format": "VIP",
-      "screen": { "width": 11, "aspect": 2.39, "bottom": 1.0 },
-      "firstRow": 4.5, "rowPitch": 1.65, "riser": 0.55, "flatRows": 0,
-      "seatWidth": 0.85, "aisle": 1.1, "eyeHeight": 1.05, "idealAngle": 45, "seatColor": "#5c2230",
-      "rows": ["2-8-2", "2-10-2", "2-10-2", "2-10-2", "2-10-2", "2-10-2", "2-8-2"]
+      "id": "vip",
+      "name": "VIP",
+      "variant": "19+, recliners, 2.39:1",
+      "format": "VIP",
+      "screen": {
+        "width": 11,
+        "aspect": 2.39,
+        "bottom": 1.0
+      },
+      "firstRow": 4.5,
+      "rowPitch": 1.65,
+      "riser": 0.55,
+      "flatRows": 0,
+      "seatWidth": 0.85,
+      "aisle": 1.1,
+      "eyeHeight": 1.05,
+      "idealAngle": 45,
+      "seatColor": "#5c2230",
+      "rows": [
+        "2-8-2",
+        "2-10-2",
+        "2-10-2",
+        "2-10-2",
+        "2-10-2",
+        "2-10-2",
+        "2-8-2"
+      ]
+    }
+  ],
+  "theatres": [
+    {
+      "id": "harbourfront",
+      "name": "Harbourfront Cinemas",
+      "rooms": {
+        "IMAX": "imax-143",
+        "UltraAVX": "ultraavx",
+        "Regular": "regular-large",
+        "VIP": "vip"
+      }
+    },
+    {
+      "id": "westgate",
+      "name": "Westgate Cinemas",
+      "rooms": {
+        "IMAX": "imax-190",
+        "UltraAVX": "ultraavx",
+        "Regular": "regular-small",
+        "VIP": "vip"
+      }
+    }
+  ],
+  "movies": [
+    {
+      "id": "northbound",
+      "title": "Northbound",
+      "genre": "Adventure",
+      "runtime": 148,
+      "rating": "PG",
+      "film": "imax",
+      "colors": [
+        "#0f2a4a",
+        "#e8a15b"
+      ],
+      "formats": [
+        "IMAX",
+        "UltraAVX",
+        "Regular",
+        "VIP"
+      ]
+    },
+    {
+      "id": "quiet-orbit",
+      "title": "The Quiet Orbit",
+      "genre": "Sci-fi",
+      "runtime": 161,
+      "rating": "14A",
+      "film": "imax",
+      "colors": [
+        "#0b0b1e",
+        "#6c5ce7"
+      ],
+      "formats": [
+        "IMAX",
+        "UltraAVX",
+        "Regular",
+        "VIP"
+      ]
+    },
+    {
+      "id": "midnight-ferry",
+      "title": "Midnight Ferry",
+      "genre": "Thriller",
+      "runtime": 125,
+      "rating": "14A",
+      "film": "2.39",
+      "colors": [
+        "#08131a",
+        "#2bb3a3"
+      ],
+      "formats": [
+        "UltraAVX",
+        "Regular",
+        "VIP"
+      ]
+    },
+    {
+      "id": "last-lap",
+      "title": "Last Lap",
+      "genre": "Action",
+      "runtime": 132,
+      "rating": "14A",
+      "film": "2.39",
+      "colors": [
+        "#2a0a0a",
+        "#ff5a36"
+      ],
+      "formats": [
+        "UltraAVX",
+        "Regular",
+        "VIP"
+      ]
+    },
+    {
+      "id": "paper-lanterns",
+      "title": "Paper Lanterns",
+      "genre": "Drama",
+      "runtime": 112,
+      "rating": "PG",
+      "film": "1.85",
+      "colors": [
+        "#2b1a0e",
+        "#ffcf6b"
+      ],
+      "formats": [
+        "UltraAVX",
+        "Regular",
+        "VIP"
+      ]
+    },
+    {
+      "id": "tiny-giants",
+      "title": "Tiny Giants",
+      "genre": "Animation",
+      "runtime": 98,
+      "rating": "G",
+      "film": "1.85",
+      "colors": [
+        "#0e3b2e",
+        "#9be15d"
+      ],
+      "formats": [
+        "UltraAVX",
+        "Regular"
+      ]
     }
   ]
 }

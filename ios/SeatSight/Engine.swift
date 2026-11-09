@@ -17,13 +17,41 @@ struct Auditorium: Codable, Identifiable, Hashable, Sendable {
     var rows: [String]
     var rowLabels: String?
 
-    static let all: [Auditorium] = {
-        struct File: Codable { let auditoriums: [Auditorium] }
+    static var all: [Auditorium] { Catalog.shared.auditoriums }
+    static func find(_ id: String) -> Auditorium { all.first { $0.id == id } ?? all[0] }
+}
+
+struct Theatre: Codable, Identifiable, Hashable, Sendable {
+    let id, name: String
+    let rooms: [String: String]   // format -> auditorium id
+}
+
+struct Movie: Codable, Identifiable, Hashable, Sendable {
+    let id, title, genre, rating, film: String
+    let runtime: Int
+    let colors: [String]
+    let formats: [String]
+    func film(for format: String) -> Double { film == "imax" ? (format == "IMAX" ? 0 : 2.39) : Double(film) ?? 0 }
+    var filmName: String { film == "imax" ? "Filmed for IMAX" : film == "2.39" ? "Scope 2.39:1" : "Flat 1.85:1" }
+    var meta: String { "\(genre) · \(runtime / 60)h \(runtime % 60)m · \(rating)" }
+}
+
+struct Catalog: Codable, Sendable {
+    let auditoriums: [Auditorium]
+    let theatres: [Theatre]
+    let movies: [Movie]
+    static let shared: Catalog = {
         guard let url = Bundle.main.url(forResource: "auditoriums", withExtension: "json"),
               let data = try? Data(contentsOf: url),
-              let file = try? JSONDecoder().decode(File.self, from: data) else { return [] }
-        return file.auditoriums
+              let c = try? JSONDecoder().decode(Catalog.self, from: data) else { return Catalog(auditoriums: [], theatres: [], movies: []) }
+        return c
     }()
+}
+
+func fnv(_ s: String) -> UInt32 {
+    var h: UInt32 = 2166136261
+    for c in s.unicodeScalars { h = (h ^ c.value) &* 16777619 }
+    return h
 }
 
 struct Metrics: Hashable, Sendable {
@@ -55,7 +83,7 @@ struct Room: Sendable {
     let W, H, bottom, top, eyeH, roomW, back, ceil: Double
     let best: Seat
 
-    init(_ a: Auditorium) {
+    init(_ a: Auditorium, seed: String = "") {
         self.a = a
         let eyeH = a.eyeHeight ?? 1.15
         let labels = Array(a.rowLabels ?? "ABCDEFGHJKLMNOPQRSTUVWXYZ")
@@ -87,21 +115,20 @@ struct Room: Sendable {
             for s in rows[r].seats.indices {
                 var seat = rows[r].seats[s]
                 seat.m = Room.metrics(a: a, rows: rows, W: W, bottom: bottom, top: bottom + H, eyeH: eyeH, s: seat)
-                seat.sold = Room.sold(a.id, index, score: seat.m.score)
+                seat.sold = Room.sold(a.id + seed, index, score: seat.m.score)
                 rows[r].seats[s] = seat
                 index += 1
             }
         }
         self.rows = rows
         seats = rows.flatMap(\.seats)
-        best = seats.max { $0.m.score < $1.m.score } ?? seats[0]
+        let open = seats.filter { !$0.sold }
+        best = (open.isEmpty ? seats : open).max { $0.m.score < $1.m.score } ?? seats[0]
     }
 
     // Stable fake "sold" seats so the map looks real. Center seats sell first.
     static func sold(_ id: String, _ i: Int, score: Int) -> Bool {
-        var h: UInt32 = 2166136261
-        for c in (id + String(i)).unicodeScalars { h = (h ^ c.value) &* 16777619 }
-        let rnd = Double(h % 1000) / 1000
+        let rnd = Double(fnv(id + String(i)) % 1000) / 1000
         return rnd < 0.15 + 0.4 * pow(Double(score) / 100, 2)
     }
 
@@ -154,6 +181,7 @@ struct Poly: Sendable {
     var n: V3?
     var emit = false
     var seat: String?
+    var sold: Bool?
     var center: V3?   // set for circles (heads)
     var radius = 0.0
 }
@@ -166,7 +194,8 @@ struct Camera: Sendable {
         return Camera(pos: pos, yaw: atan2(d.x, -d.z), pitch: atan2(d.y, (d.x * d.x + d.z * d.z).squareRoot()))
     }
     static func eye(_ r: Room, _ s: Seat) -> Camera { look(V3(s.x, s.eye, s.z), V3(0, r.bottom + r.H / 2, 0)) }
-    static func over(_ r: Room) -> Camera { look(V3(0, r.ceil - 0.6, r.back - 0.4), V3(0, r.bottom + r.H * 0.35, 0)) }
+    // Dollhouse view from behind and above; the back wall and ceiling are culled so you see every seat.
+    static func over(_ r: Room) -> Camera { look(V3(0, r.ceil + 3, r.back + 2.5), V3(0, r.rows[0].floor, r.back * 0.45)) }
     func lerp(_ b: Camera, _ t: Double) -> Camera {
         Camera(pos: pos + (b.pos - pos) * t, yaw: yaw + (b.yaw - yaw) * t, pitch: pitch + (b.pitch - pitch) * t, zoom: zoom + (b.zoom - zoom) * t)
     }
@@ -179,15 +208,15 @@ enum Engine {
         var out: [Poly] = []
         out.reserveCapacity(r.seats.count * 11 + 80)
         let a = r.a, hw = r.roomW / 2
-        func quad(_ p: [V3], _ col: V3, _ layer: Int, _ n: V3?, emit: Bool = false, seat: String? = nil) {
-            out.append(Poly(p: p, col: col, layer: layer, n: n, emit: emit, seat: seat))
+        func quad(_ p: [V3], _ col: V3, _ layer: Int, _ n: V3?, emit: Bool = false, seat: String? = nil, sold: Bool? = nil) {
+            out.append(Poly(p: p, col: col, layer: layer, n: n, emit: emit, seat: seat, sold: sold))
         }
-        func box(_ x0: Double, _ x1: Double, _ y0: Double, _ y1: Double, _ z0: Double, _ z1: Double, _ col: V3, _ seat: String) {
-            quad([V3(x0, y0, z0), V3(x1, y0, z0), V3(x1, y1, z0), V3(x0, y1, z0)], col, 9, V3(0, 0, -1), seat: seat)
-            quad([V3(x1, y0, z1), V3(x0, y0, z1), V3(x0, y1, z1), V3(x1, y1, z1)], col, 9, V3(0, 0, 1), seat: seat)
-            quad([V3(x0, y1, z0), V3(x1, y1, z0), V3(x1, y1, z1), V3(x0, y1, z1)], col, 9, V3(0, 1, 0), seat: seat)
-            quad([V3(x0, y0, z1), V3(x0, y0, z0), V3(x0, y1, z0), V3(x0, y1, z1)], col, 9, V3(-1, 0, 0), seat: seat)
-            quad([V3(x1, y0, z0), V3(x1, y0, z1), V3(x1, y1, z1), V3(x1, y1, z0)], col, 9, V3(1, 0, 0), seat: seat)
+        func box(_ x0: Double, _ x1: Double, _ y0: Double, _ y1: Double, _ z0: Double, _ z1: Double, _ col: V3, _ seat: String, _ sold: Bool) {
+            quad([V3(x0, y0, z0), V3(x1, y0, z0), V3(x1, y1, z0), V3(x0, y1, z0)], col, 20, V3(0, 0, -1), seat: seat, sold: sold)
+            quad([V3(x1, y0, z1), V3(x0, y0, z1), V3(x0, y1, z1), V3(x1, y1, z1)], col, 20, V3(0, 0, 1), seat: seat, sold: sold)
+            quad([V3(x0, y1, z0), V3(x1, y1, z0), V3(x1, y1, z1), V3(x0, y1, z1)], col, 20, V3(0, 1, 0), seat: seat, sold: sold)
+            quad([V3(x0, y0, z1), V3(x0, y0, z0), V3(x0, y1, z0), V3(x0, y1, z1)], col, 20, V3(-1, 0, 0), seat: seat, sold: sold)
+            quad([V3(x1, y0, z0), V3(x1, y0, z1), V3(x1, y1, z1), V3(x1, y1, z0)], col, 20, V3(1, 0, 0), seat: seat, sold: sold)
         }
         let wall = V3(22, 24, 34), floorC = V3(30, 28, 34), stepC = V3(44, 40, 48)
         quad([V3(-hw, 0, 0), V3(hw, 0, 0), V3(hw, r.ceil, 0), V3(-hw, r.ceil, 0)], V3(14, 15, 20), 0, V3(0, 0, 1))
@@ -214,34 +243,49 @@ enum Engine {
         let f = film > 0 ? film : a.screen.aspect
         var cw = r.W, ch = r.W / f
         if ch > r.H { ch = r.H; cw = r.H * f }
-        let cy0 = r.bottom + (r.H - ch) / 2
-        func P(_ u: Double, _ v: Double, _ l: Double) -> V3 { V3(-cw / 2 + u * cw, cy0 + v * ch, zS + l * 0.001) }
-        let sky: [V3] = [V3(255, 196, 120), V3(247, 150, 110), V3(196, 98, 120), V3(110, 70, 130), V3(44, 44, 96)]
-        for i in 0..<12 {
-            let v0 = 0.25 + Double(i) * 0.0625, t = (Double(i) + 0.5) / 3, k = Int(t)
-            quad([P(0, v0, 1), P(1, v0, 1), P(1, v0 + 0.0625, 1), P(0, v0 + 0.0625, 1)], sky[k] + (sky[k + 1] - sky[k]) * (t - Double(k)), 3, nil, emit: true)
+        let mid = r.bottom + r.H / 2, hh = ch / cw / 2
+        // the bare screen: any part the movie doesn't cover shows as grey bars
+        quad([V3(-sx, r.bottom, zS + 0.0005), V3(sx, r.bottom, zS + 0.0005), V3(sx, r.top, zS + 0.0005), V3(-sx, r.top, zS + 0.0005)], V3(24, 24, 30), 3, nil, emit: true)
+        // One fixed picture cropped by the frame: a taller frame (IMAX) shows more sky and foreground.
+        func pic(_ pts: [(Double, Double)], _ col: V3, _ l: Int) {
+            let c = clipY(pts, -hh, hh)
+            if c.count > 2 { quad(c.map { V3(-cw / 2 + $0.0 * cw, mid + $0.1 * cw, zS + Double(l) * 0.001) }, col, 3 + l, nil, emit: true) }
         }
-        quad([P(0, 0, 1), P(1, 0, 1), P(1, 0.25, 1), P(0, 0.25, 1)], V3(255, 214, 140), 3, nil, emit: true)
-        let sun = (0..<24).map { k -> V3 in let t = Double(k) / 24 * 2 * .pi; return P(0.62 + 0.07 * cos(t) * (ch / cw), 0.38 + 0.07 * sin(t), 2) }
-        quad(sun, V3(255, 236, 190), 4, nil, emit: true)
-        func ridge(_ pts: [(Double, Double)], _ col: V3, _ l: Double) {
-            quad([P(0, 0, l)] + pts.map { P($0.0, $0.1, l) } + [P(1, 0, l)], col, 4 + Int(l), nil, emit: true)
+        func ring(_ u: Double, _ y: Double, _ rr: Double, _ n: Int = 20) -> [(Double, Double)] {
+            (0..<n).map { k in let t = Double(k) / Double(n) * 6.283; return (u + rr * cos(t), y + rr * sin(t)) }
         }
-        ridge([(0, 0.3), (0.12, 0.42), (0.22, 0.33), (0.35, 0.5), (0.5, 0.36), (0.66, 0.44), (0.8, 0.3), (0.9, 0.38), (1, 0.32)], V3(120, 70, 110), 1)
-        ridge([(0, 0.18), (0.15, 0.26), (0.3, 0.16), (0.45, 0.24), (0.6, 0.12), (0.78, 0.22), (1, 0.14)], V3(40, 26, 52), 2)
-        for (u0, u1, v) in [(0.25, 0.75, 0.085), (0.32, 0.68, 0.04)] {
-            quad([P(u0, v, 5), P(u1, v, 5), P(u1, v + 0.028, 5), P(u0, v + 0.028, 5)], V3(250, 250, 250), 7, nil, emit: true)
+        let sky: [V3] = [V3(255, 196, 120), V3(247, 150, 110), V3(196, 98, 120), V3(110, 70, 130), V3(44, 44, 96), V3(12, 14, 40)]
+        for i in 0..<16 {
+            let y0 = -0.06 + Double(i) * 0.026, t = Double(i) / 15 * 5, k = min(4, Int(t))
+            pic([(0, y0), (1, y0), (1, y0 + 0.027), (0, y0 + 0.027)], sky[k] + (sky[k + 1] - sky[k]) * (t - Double(k)), 1)
+        }
+        for k in 0..<24 {
+            let u = (Double(k) * 0.137 + 0.03).truncatingRemainder(dividingBy: 1), y = 0.215 + (Double(k) * 0.071).truncatingRemainder(dividingBy: 0.13)
+            pic([(u, y), (u + 0.003, y), (u + 0.003, y + 0.003), (u, y + 0.003)], V3(230, 230, 255), 2)
+        }
+        pic(ring(0.18, 0.245, 0.02), V3(236, 232, 214), 2)
+        pic(ring(0.62, 0, 0.045, 24), V3(255, 236, 190), 2)
+        pic([(0, -0.35), (0, -0.02), (0.12, 0.05), (0.22, 0), (0.35, 0.08), (0.5, 0.01), (0.66, 0.05), (0.8, -0.02), (0.9, 0.03), (1, -0.01), (1, -0.35)], V3(120, 70, 110), 3)
+        pic([(0, -0.16), (0, -0.08), (0.15, -0.05), (0.3, -0.1), (0.45, -0.06), (0.6, -0.12), (0.78, -0.07), (1, -0.11), (1, -0.16)], V3(40, 26, 52), 4)
+        pic([(0, -0.35), (1, -0.35), (1, -0.15), (0, -0.15)], V3(26, 40, 62), 5)
+        for (y, wd) in [(-0.17, 0.05), (-0.2, 0.035), (-0.24, 0.025), (-0.29, 0.015)] {
+            pic([(0.62 - wd / 2, y), (0.62 + wd / 2, y), (0.62 + wd / 2, y + 0.008), (0.62 - wd / 2, y + 0.008)], V3(255, 200, 140), 6)
+        }
+        // subtitles at the bottom of the frame, to check what the head in front covers
+        for (u0, u1, v) in [(0.25, 0.75, 0.05), (0.32, 0.68, 0.025)] {
+            let y = mid - ch / 2 + v * ch
+            quad([V3(-cw / 2 + u0 * cw, y, zS + 0.008), V3(-cw / 2 + u1 * cw, y, zS + 0.008), V3(-cw / 2 + u1 * cw, y + ch * 0.028, zS + 0.008), V3(-cw / 2 + u0 * cw, y + ch * 0.028, zS + 0.008)], V3(250, 250, 250), 10, nil, emit: true)
         }
         // seats and people
-        let seatC = hex(a.seatColor ?? "#35416b"), recl = a.seatWidth >= 0.8
+        let seatC = hex(a.seatColor ?? "#35416b"), soldC = V3(46, 46, 52), recl = a.seatWidth >= 0.8
         let person = V3(52, 48, 56)
         for s in r.seats {
             let w = a.seatWidth * 0.44, fl = s.floor, z = s.z
-            box(s.x - w, s.x + w, fl + 0.28, fl + 0.48, z - (recl ? 0.45 : 0.32), z + 0.12, seatC, s.id)
-            box(s.x - w, s.x + w, fl + 0.28, fl + (recl ? 1.08 : 0.98), z + 0.12, z + 0.24, seatC, s.id)
+            box(s.x - w, s.x + w, fl + 0.28, fl + 0.48, z - (recl ? 0.45 : 0.32), z + 0.12, s.sold ? soldC : seatC, s.id, s.sold)
+            box(s.x - w, s.x + w, fl + 0.28, fl + (recl ? 1.08 : 0.98), z + 0.12, z + 0.24, s.sold ? soldC : seatC, s.id, s.sold)
             if crowd && s.sold && s.id != selfID {
-                out.append(Poly(p: [], col: person, layer: 9, seat: s.id, center: V3(s.x, s.eye + 0.04, z), radius: 0.11))
-                quad([V3(s.x - 0.22, s.eye - 0.38, z + 0.02), V3(s.x + 0.22, s.eye - 0.38, z + 0.02), V3(s.x + 0.2, s.eye - 0.12, z + 0.02), V3(s.x - 0.2, s.eye - 0.12, z + 0.02)], person, 9, nil, seat: s.id)
+                out.append(Poly(p: [], col: person, layer: 20, seat: s.id, center: V3(s.x, s.eye + 0.04, z), radius: 0.11))
+                quad([V3(s.x - 0.22, s.eye - 0.38, z + 0.02), V3(s.x + 0.22, s.eye - 0.38, z + 0.02), V3(s.x + 0.2, s.eye - 0.12, z + 0.02), V3(s.x - 0.2, s.eye - 0.12, z + 0.02)], person, 20, nil, seat: s.id)
             }
         }
         return out
@@ -251,15 +295,49 @@ enum Engine {
 
     private static let light: V3 = { let v = V3(0.25, 0.6, -0.75); return v / (v * v).sum().squareRoot() }()
 
-    static func render(_ g: inout GraphicsContext, size: CGSize, polys: [Poly], cam: Camera, highlight: String? = nil, hide: String? = nil) {
-        let w = size.width, h = size.height
-        let cy = cos(cam.yaw), sy = sin(cam.yaw), cp = cos(cam.pitch), sp = sin(cam.pitch)
-        let fw = V3(sy * cp, sp, -cy * cp), rt = V3(cy, 0, sy)
-        let up = V3(rt.y * fw.z - rt.z * fw.y, rt.z * fw.x - rt.x * fw.z, rt.x * fw.y - rt.y * fw.x)
-        let f = min(w / 2 / tan(.pi / 4), h / 2 / tan(37 * .pi / 180)) * cam.zoom
-        let pos = cam.pos
+    struct View {
+        let f: Double, pos: V3, rt: V3, up: V3, fw: V3, w: Double, h: Double
+        init(_ cam: Camera, _ size: CGSize) {
+            w = size.width; h = size.height; pos = cam.pos
+            let cy = cos(cam.yaw), sy = sin(cam.yaw), cp = cos(cam.pitch), sp = sin(cam.pitch)
+            fw = V3(sy * cp, sp, -cy * cp); rt = V3(cy, 0, sy)
+            up = V3(rt.y * fw.z - rt.z * fw.y, rt.z * fw.x - rt.x * fw.z, rt.x * fw.y - rt.y * fw.x)
+            f = min(w / 2 / tan(.pi / 4), h / 2 / tan(37 * .pi / 180)) * cam.zoom
+        }
         func toCam(_ v: V3) -> V3 { let d = v - pos; return V3((d * rt).sum(), (d * up).sum(), (d * fw).sum()) }
         func proj(_ q: V3) -> CGPoint { CGPoint(x: w / 2 + f * q.x / q.z, y: h / 2 - f * q.y / q.z) }
+    }
+
+    /// Which seat is under a tap? Forgiving: falls back to the nearest seat face within 24 pt.
+    static func pick(_ point: CGPoint, size: CGSize, polys: [Poly], cam: Camera) -> String? {
+        let v = View(cam, size)
+        var hit: String?, best = Double.infinity, near: String?, nearD = 24.0
+        for poly in polys {
+            guard let seat = poly.seat, poly.center == nil, poly.sold != nil else { continue }
+            if let n = poly.n, ((v.pos - poly.p[0]) * n).sum() <= 0 { continue }
+            let cs = poly.p.map(v.toCam)
+            if cs.contains(where: { $0.z < near0 }) { continue }
+            let pts = cs.map(v.proj)
+            var inside = false, j = pts.count - 1
+            for i in pts.indices {
+                if (pts[i].y > point.y) != (pts[j].y > point.y),
+                   point.x < (pts[j].x - pts[i].x) * (point.y - pts[i].y) / (pts[j].y - pts[i].y) + pts[i].x { inside.toggle() }
+                j = i
+            }
+            let d = cs.reduce(0) { $0 + $1.z } / Double(cs.count)
+            if inside && d < best { best = d; hit = seat }
+            let cx = pts.reduce(0) { $0 + $1.x } / Double(pts.count), cy = pts.reduce(0) { $0 + $1.y } / Double(pts.count)
+            let dist = hypot(cx - point.x, cy - point.y)
+            if dist < nearD { nearD = dist; near = seat }
+        }
+        return hit ?? near
+    }
+    private static let near0 = near
+
+    static func render(_ g: inout GraphicsContext, size: CGSize, polys: [Poly], cam: Camera, highlight: String? = nil, hide: String? = nil, map: Bool = false) {
+        let v = View(cam, size), f = v.f, pos = cam.pos
+        func toCam(_ p: V3) -> V3 { v.toCam(p) }
+        func proj(_ q: V3) -> CGPoint { v.proj(q) }
 
         struct Item { let i: Int; let d: Double; let path: Path }
         var items: [Item] = []
@@ -291,15 +369,29 @@ enum Engine {
         for it in items {
             let p = polys[it.i]
             var col = p.col
+            if map, let sold = p.sold { col = sold ? V3(58, 58, 66) : V3(70, 120, 205) } // room view: map colors
             if let s = p.seat, s == highlight, p.center == nil { col = V3(255, 196, 60) }
             var k = 1.0
             if !p.emit {
                 let lit = p.n.map { max(0, ($0 * light).sum()) } ?? 0.5
-                k = (0.45 + 0.75 * lit) / (1 + it.d * 0.03)
+                k = (0.45 + 0.75 * lit) / (map ? 1 : 1 + it.d * 0.03)
             }
             let c = col * k / 255
             g.fill(it.path, with: .color(Color(red: min(1, c.x), green: min(1, c.y), blue: min(1, c.z))))
         }
+    }
+
+    private static func clipY(_ pts: [(Double, Double)], _ lo: Double, _ hi: Double) -> [(Double, Double)] {
+        func cut(_ P: [(Double, Double)], _ keep: (Double) -> Bool, _ yv: Double) -> [(Double, Double)] {
+            var o: [(Double, Double)] = []
+            for i in P.indices {
+                let A = P[i], B = P[(i + 1) % P.count], a = keep(A.1), b = keep(B.1)
+                if a { o.append(A) }
+                if a != b { let t = (yv - A.1) / (B.1 - A.1); o.append((A.0 + (B.0 - A.0) * t, yv)) }
+            }
+            return o
+        }
+        return cut(cut(pts, { $0 >= lo }, lo), { $0 <= hi }, hi)
     }
 
     private static func clipNear(_ cs: [V3]) -> [V3] {

@@ -19,6 +19,13 @@ Pick a seat, see the screen from it. Web + iOS, no server, no 3D engine.
 - [x] Web: GitHub Pages from `docs/`, zero dependencies
 - [x] iOS: SwiftUI `Canvas`, iOS 17+, XcodeGen project
 
+## v1.1 (2026-11-08)
+- [x] Flow: theatre, movie, showtime grouped by screen type, then seats (made-up movies and theatres, original design)
+- [x] Two theatres with different rooms (Harbourfront has the 1.43 GT IMAX and a large Regular, Westgate has 1.90 IMAX and a small Regular)
+- [x] Screens look different now: one fixed picture cropped by each frame, bare screen shows as grey bars, HUD says how much more picture you get
+- [x] Room view: zoom out to see the room from above, your seat yellow, taken seats dark, tap to switch
+- [x] Taken seats show in 3D and can't be picked; arrows skip taken seats
+
 ## Open items / next
 - [ ] Real room data. Ask Cineplex (or theatre fans) for measured drawings per auditorium
 - [ ] iOS gyro look-around (CoreMotion)
