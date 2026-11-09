@@ -191,16 +191,18 @@ struct SeatMapView: View {
     }
 
     var body: some View {
+        GeometryReader { geo in
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 8) {
                     capsule(bestOnly ? "Showing best seats" : "Show best seats", on: bestOnly) { bestOnly.toggle() }
                     capsule("Pick the best seat for me", on: false) { open(room.best) }
                 }
-                seatMap
+                seatMap(width: geo.size.width - 32)
             }
             .padding(16)
             .padding(.bottom, 90)
+        }
         }
         .background(Theme.bg)
         .navigationTitle(show.movie.title)
@@ -243,6 +245,8 @@ struct SeatMapView: View {
             Spacer()
             Button("View from seat") { viewing = chosen }
                 .font(.headline)
+                .lineLimit(1)
+                .fixedSize()
                 .padding(.horizontal, 18).padding(.vertical, 12)
                 .foregroundStyle(chosen == nil ? Color.secondary : Color.white)
                 .background(chosen == nil ? Theme.surface : Theme.pick, in: .rect(cornerRadius: 14))
@@ -253,19 +257,22 @@ struct SeatMapView: View {
         .padding(.horizontal, 16).padding(.bottom, 6)
     }
 
-    private var seatMap: some View {
-        let cols = Double(room.rows.map { $0.seats.count + ($0.parts.count - 1) }.max() ?? 20) + 3
-        let s = max(16, min(24, (UIScreen.main.bounds.width - 52) / cols - 3))
+    /// Seats are sized to fit the card width, so the whole room is always visible.
+    private func seatMap(width: Double) -> some View {
+        let gaps = Double(room.rows.map { $0.parts.count - 1 }.max() ?? 2)
+        let most = Double(room.rows.map(\.seats.count).max() ?? 20)
+        let spacing = 2.5
+        // row = 2 labels (14 each) + seats + gaps (1.2 seat each) + spacing between items
+        let s = max(7, min(24, (width - 20 - 28 - spacing * (most + gaps + 2)) / (most + gaps * 1.2)))
         return VStack(spacing: 18) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                VStack(spacing: 4) {
+                VStack(spacing: spacing + 1) {
                     VStack(spacing: 6) {
                         Capsule().fill(.white.opacity(0.9)).frame(height: 3).shadow(color: .indigo, radius: 8, y: -4)
                         Text("SCREEN").font(.caption2).tracking(4).foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 40).padding(.bottom, 18)
                     ForEach(room.rows, id: \.label) { row in
-                        HStack(spacing: 3) {
+                        HStack(spacing: spacing) {
                             Text(row.label).font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary).frame(width: 14)
                             ForEach(row.seats) { seat in
                                 if seat.num > 1, seat.section != row.seats[seat.num - 2].section { Color.clear.frame(width: s * 1.2, height: s) }
@@ -276,8 +283,6 @@ struct SeatMapView: View {
                     }
                 }
                 .padding(.horizontal, 10)
-            }
-            .defaultScrollAnchor(.center)
             HStack(spacing: 16) {
                 legend(Theme.open, "Open"); legend(Theme.taken, "Taken"); legend(Theme.pick, "Your seat")
             }
